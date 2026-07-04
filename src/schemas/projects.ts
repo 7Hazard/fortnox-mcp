@@ -53,6 +53,70 @@ export const GetProjectSchema = z.object({
 export type GetProjectInput = z.infer<typeof GetProjectSchema>;
 
 /**
+ * Schema for creating a project
+ */
+export const CreateProjectSchema = z.object({
+  description: z.string().min(1).max(50)
+    .describe("Project description/name (required)"),
+  project_number: z.string().max(20).optional()
+    .describe("Project number (auto-generated if not provided)"),
+  status: ProjectStatusEnum.optional()
+    .describe("Project status (default: NOTSTARTED)"),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+    .describe("Project start date (YYYY-MM-DD)"),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+    .describe("Project end date (YYYY-MM-DD)"),
+  project_leader: z.string().max(50).optional()
+    .describe("Name of the project leader"),
+  contact_person: z.string().max(50).optional()
+    .describe("Name of the contact person"),
+  comments: z.string().max(512).optional()
+    .describe("Internal project comments"),
+  response_format: z.nativeEnum(ResponseFormat).default(ResponseFormat.MARKDOWN)
+    .describe("Output format: 'markdown' or 'json'")
+}).strict();
+
+export type CreateProjectInput = z.infer<typeof CreateProjectSchema>;
+
+/**
+ * Schema for updating a project
+ */
+export const UpdateProjectSchema = z.object({
+  project_number: z.string().min(1)
+    .describe("Project number to update (required)"),
+  description: z.string().min(1).max(50).optional()
+    .describe("Project description/name"),
+  status: ProjectStatusEnum.optional()
+    .describe("Project status"),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+    .describe("Project start date (YYYY-MM-DD)"),
+  end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional()
+    .describe("Project end date (YYYY-MM-DD)"),
+  project_leader: z.string().max(50).optional()
+    .describe("Name of the project leader"),
+  contact_person: z.string().max(50).optional()
+    .describe("Name of the contact person"),
+  comments: z.string().max(512).optional()
+    .describe("Internal project comments"),
+  response_format: z.nativeEnum(ResponseFormat).default(ResponseFormat.MARKDOWN)
+    .describe("Output format: 'markdown' or 'json'")
+}).strict();
+
+export type UpdateProjectInput = z.infer<typeof UpdateProjectSchema>;
+
+/**
+ * Schema for deleting a project
+ */
+export const DeleteProjectSchema = z.object({
+  project_number: z.string().min(1)
+    .describe("Project number to delete (required)"),
+  response_format: z.nativeEnum(ResponseFormat).default(ResponseFormat.MARKDOWN)
+    .describe("Output format: 'markdown' or 'json'")
+}).strict();
+
+export type DeleteProjectInput = z.infer<typeof DeleteProjectSchema>;
+
+/**
  * Schema for listing cost centers
  */
 export const ListCostCentersSchema = z.object({
