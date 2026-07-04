@@ -8,10 +8,11 @@
  * Supports two modes:
  *
  * LOCAL MODE (default):
- *   Run with npx, users provide their own refresh token
+ *   Run with npx, users provide client credentials
  *   - FORTNOX_CLIENT_ID: Fortnox app client ID (can be embedded)
  *   - FORTNOX_CLIENT_SECRET: Fortnox app client secret (can be embedded)
- *   - FORTNOX_REFRESH_TOKEN: User's OAuth2 refresh token
+ *   - FORTNOX_REFRESH_TOKEN: Optional OAuth2 refresh token seed
+ *     (if missing, server performs one-time local browser OAuth bootstrap)
  *   - TRANSPORT: 'stdio' (default) or 'http'
  *   - PORT: HTTP server port (default: 3000)
  *
@@ -30,7 +31,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import express from "express";
 
 import { loadConfig, validateEnvironment, logConfig } from "./config.js";
-import { getFortnoxAuth } from "./services/auth.js";
+import { ensureLocalAuth } from "./services/auth.js";
 import { getStorageFromEnv } from "./auth/storage/index.js";
 import { runRemoteServer } from "./server/remote.js";
 import { registerCustomerTools } from "./tools/customers.js";
@@ -47,7 +48,7 @@ import { registerBIAnalyticsTools } from "./tools/biAnalytics.js";
 function createMcpServer(): McpServer {
   const server = new McpServer({
     name: "fortnox-mcp-server",
-    version: "1.0.0"
+    version: "1.0.0",
   });
 
   registerCustomerTools(server);
@@ -66,12 +67,11 @@ function createMcpServer(): McpServer {
 
 async function runStdio(): Promise<void> {
   try {
-    const auth = getFortnoxAuth();
-    if (!auth.isAuthenticated()) {
-      throw new Error("FORTNOX_REFRESH_TOKEN not set");
-    }
+    await ensureLocalAuth();
   } catch (error) {
-    console.error(`ERROR: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `ERROR: ${error instanceof Error ? error.message : String(error)}`,
+    );
     process.exit(1);
   }
 
@@ -82,12 +82,11 @@ async function runStdio(): Promise<void> {
 
 async function runLocalHTTP(): Promise<void> {
   try {
-    const auth = getFortnoxAuth();
-    if (!auth.isAuthenticated()) {
-      throw new Error("FORTNOX_REFRESH_TOKEN not set");
-    }
+    await ensureLocalAuth();
   } catch (error) {
-    console.error(`ERROR: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `ERROR: ${error instanceof Error ? error.message : String(error)}`,
+    );
     process.exit(1);
   }
 
@@ -97,7 +96,11 @@ async function runLocalHTTP(): Promise<void> {
 
   // Health check endpoint
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", server: "fortnox-mcp-server", mode: "local-http" });
+    res.json({
+      status: "ok",
+      server: "fortnox-mcp-server",
+      mode: "local-http",
+    });
   });
 
   // MCP endpoint
@@ -105,7 +108,7 @@ async function runLocalHTTP(): Promise<void> {
     // Create new transport for each request (stateless)
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
-      enableJsonResponse: true
+      enableJsonResponse: true,
     });
 
     res.on("close", () => transport.close());

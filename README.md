@@ -4,10 +4,10 @@ An MCP (Model Context Protocol) server for integrating with the Fortnox Swedish 
 
 ## Two Ways to Use
 
-| Mode | Best For | Setup |
-|------|----------|-------|
-| **Remote Mode** | End users | Just add URL, authorize in browser |
-| **Local Mode** | Developers, self-hosted | Configure environment variables |
+| Mode            | Best For                | Setup                              |
+| --------------- | ----------------------- | ---------------------------------- |
+| **Remote Mode** | End users               | Just add URL, authorize in browser |
+| **Local Mode**  | Developers, self-hosted | Configure environment variables    |
 
 ---
 
@@ -25,6 +25,7 @@ The easiest way to use Fortnox MCP - no credentials needed, just authorize in yo
 ### Option B: Add to Claude Desktop
 
 Open your Claude Desktop config file:
+
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
@@ -52,11 +53,12 @@ For developers who want to run the server locally or use their own Fortnox app c
 
 1. Register at [Fortnox Developer Portal](https://developer.fortnox.se)
 2. Create an application to get your **Client ID** and **Client Secret**
-3. Complete the OAuth2 flow to get a **Refresh Token**
+3. (Optional) Pre-generate a **Refresh Token** if you do not want first-run browser bootstrap
 
 ### 2. Add to Claude Desktop
 
 Open your Claude Desktop config file:
+
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
@@ -70,8 +72,7 @@ Add this configuration:
       "args": ["-y", "fortnox-mcp-server"],
       "env": {
         "FORTNOX_CLIENT_ID": "your-client-id",
-        "FORTNOX_CLIENT_SECRET": "your-client-secret",
-        "FORTNOX_REFRESH_TOKEN": "your-refresh-token"
+        "FORTNOX_CLIENT_SECRET": "your-client-secret"
       }
     }
   }
@@ -87,6 +88,7 @@ That's it! You can now ask Claude to manage your Fortnox invoices, customers, an
 ## Features
 
 ### Customer Management
+
 - `fortnox_list_customers` - List and search customers
 - `fortnox_get_customer` - Get customer details
 - `fortnox_create_customer` - Create new customer
@@ -94,6 +96,7 @@ That's it! You can now ask Claude to manage your Fortnox invoices, customers, an
 - `fortnox_delete_customer` - Delete customer
 
 ### Invoice Management
+
 - `fortnox_list_invoices` - List invoices with filtering
 - `fortnox_get_invoice` - Get invoice details with line items
 - `fortnox_create_invoice` - Create new invoice
@@ -104,6 +107,7 @@ That's it! You can now ask Claude to manage your Fortnox invoices, customers, an
 - `fortnox_send_invoice_email` - Send invoice by email
 
 ### Supplier Management
+
 - `fortnox_list_suppliers` - List and search suppliers
 - `fortnox_get_supplier` - Get supplier details
 - `fortnox_create_supplier` - Create new supplier
@@ -111,16 +115,19 @@ That's it! You can now ask Claude to manage your Fortnox invoices, customers, an
 - `fortnox_delete_supplier` - Delete supplier
 
 ### Supplier Invoice Management
+
 - `fortnox_list_supplier_invoices` - List supplier invoices with filtering
 - `fortnox_get_supplier_invoice` - Get supplier invoice details
 - `fortnox_approve_supplier_invoice` - Approve supplier invoice for payment
 - `fortnox_payables_report` - Get accounts payable aging report
 
 ### Order Management
+
 - `fortnox_list_orders` - List sales orders with filtering
 - `fortnox_list_offers` - List offers/quotes with filtering
 
 ### Account Management
+
 - `fortnox_list_accounts` - List chart of accounts
 - `fortnox_get_account` - Get account details
 - `fortnox_create_account` - Create new account
@@ -128,6 +135,7 @@ That's it! You can now ask Claude to manage your Fortnox invoices, customers, an
 - `fortnox_delete_account` - Delete account
 
 ### Voucher Management
+
 - `fortnox_list_vouchers` - List vouchers (journal entries)
 - `fortnox_get_voucher` - Get voucher details with rows
 - `fortnox_create_voucher` - Create manual voucher
@@ -136,15 +144,18 @@ That's it! You can now ask Claude to manage your Fortnox invoices, customers, an
 - `fortnox_search_vouchers` - Search vouchers by description, account, or amount
 
 ### Company Information
+
 - `fortnox_get_company_info` - Get company details
 - `fortnox_list_financial_years` - List company financial years
 
 ### Analytics
+
 - `fortnox_invoice_summary` - Get invoice statistics by period
 - `fortnox_top_customers` - Get top customers by revenue
 - `fortnox_unpaid_report` - Get detailed unpaid invoice report
 
 ### Business Intelligence
+
 - `fortnox_cash_flow_forecast` - Forecast cash flow based on invoices and payables
 - `fortnox_order_pipeline` - Analyze sales order pipeline
 - `fortnox_sales_funnel` - Analyze sales funnel from offers to invoices
@@ -184,36 +195,36 @@ npm run build
 
 #### Local Mode (default)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `FORTNOX_CLIENT_ID` | Yes | Your Fortnox app client ID |
-| `FORTNOX_CLIENT_SECRET` | Yes | Your Fortnox app client secret |
-| `FORTNOX_REFRESH_TOKEN` | Yes | OAuth2 refresh token (only needed for initial setup; automatically persisted after first use) |
-| `FORTNOX_ACCESS_TOKEN` | No | Current access token (auto-refreshed) |
-| `TRANSPORT` | No | `stdio` (default) or `http` |
-| `PORT` | No | HTTP port (default: 3000) |
+| Variable                | Required | Description                                                                                           |
+| ----------------------- | -------- | ----------------------------------------------------------------------------------------------------- |
+| `FORTNOX_CLIENT_ID`     | Yes      | Your Fortnox app client ID                                                                            |
+| `FORTNOX_CLIENT_SECRET` | Yes      | Your Fortnox app client secret                                                                        |
+| `FORTNOX_REFRESH_TOKEN` | No       | Optional seed OAuth2 refresh token (if missing, server starts one-time local browser OAuth bootstrap) |
+| `FORTNOX_ACCESS_TOKEN`  | No       | Current access token (auto-refreshed)                                                                 |
+| `TRANSPORT`             | No       | `stdio` (default) or `http`                                                                           |
+| `PORT`                  | No       | HTTP port (default: 3000)                                                                             |
 
 #### Remote Mode (AUTH_MODE=remote)
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `AUTH_MODE` | Yes | Set to `remote` |
-| `SERVER_URL` | Yes | Public URL of your server |
-| `JWT_SECRET` | Yes | Secret for signing JWT tokens |
-| `FORTNOX_CLIENT_ID` | Yes | Your Fortnox app client ID |
-| `FORTNOX_CLIENT_SECRET` | Yes | Your Fortnox app client secret |
-| `UPSTASH_REDIS_REST_URL` | Yes* | Upstash Redis URL for token storage |
-| `UPSTASH_REDIS_REST_TOKEN` | Yes* | Upstash Redis token |
-| `PORT` | No | HTTP port (default: 3000) |
+| Variable                   | Required | Description                         |
+| -------------------------- | -------- | ----------------------------------- |
+| `AUTH_MODE`                | Yes      | Set to `remote`                     |
+| `SERVER_URL`               | Yes      | Public URL of your server           |
+| `JWT_SECRET`               | Yes      | Secret for signing JWT tokens       |
+| `FORTNOX_CLIENT_ID`        | Yes      | Your Fortnox app client ID          |
+| `FORTNOX_CLIENT_SECRET`    | Yes      | Your Fortnox app client secret      |
+| `UPSTASH_REDIS_REST_URL`   | Yes\*    | Upstash Redis URL for token storage |
+| `UPSTASH_REDIS_REST_TOKEN` | Yes\*    | Upstash Redis token                 |
+| `PORT`                     | No       | HTTP port (default: 3000)           |
 
-*Falls back to in-memory storage if not provided (not recommended for production)
+\*Falls back to in-memory storage if not provided (not recommended for production)
 
 ### Getting OAuth Credentials
 
 1. Register as a developer at [Fortnox Developer Portal](https://developer.fortnox.se)
 2. Create a new application to get Client ID and Client Secret
-3. Complete the OAuth2 authorization flow to obtain a refresh token
-4. Set the environment variables
+3. Set `FORTNOX_CLIENT_ID` and `FORTNOX_CLIENT_SECRET`
+4. On first run, authorize in browser when prompted (or provide `FORTNOX_REFRESH_TOKEN` up front)
 
 ## Usage
 
@@ -232,6 +243,7 @@ Then connect to `http://localhost:3000/mcp`
 ## Tool Examples
 
 ### List Unpaid Invoices
+
 ```json
 {
   "tool": "fortnox_list_invoices",
@@ -243,6 +255,7 @@ Then connect to `http://localhost:3000/mcp`
 ```
 
 ### Create Invoice
+
 ```json
 {
   "tool": "fortnox_create_invoice",
@@ -260,6 +273,7 @@ Then connect to `http://localhost:3000/mcp`
 ```
 
 ### Create Voucher
+
 ```json
 {
   "tool": "fortnox_create_voucher",
@@ -296,11 +310,11 @@ npm run clean
 
 This server is published to multiple registries for easy installation:
 
-| Registry | URL | Purpose |
-|----------|-----|---------|
-| **npm** | [npmjs.com/package/fortnox-mcp-server](https://www.npmjs.com/package/fortnox-mcp-server) | Package distribution via `npx` |
-| **MCP Registry** | [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io) | Official MCP server discovery |
-| **GitHub** | [github.com/jakobwennberg/fortnox-mcp](https://github.com/jakobwennberg/fortnox-mcp) | Source code |
+| Registry         | URL                                                                                      | Purpose                        |
+| ---------------- | ---------------------------------------------------------------------------------------- | ------------------------------ |
+| **npm**          | [npmjs.com/package/fortnox-mcp-server](https://www.npmjs.com/package/fortnox-mcp-server) | Package distribution via `npx` |
+| **MCP Registry** | [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io)             | Official MCP server discovery  |
+| **GitHub**       | [github.com/jakobwennberg/fortnox-mcp](https://github.com/jakobwennberg/fortnox-mcp)     | Source code                    |
 
 ### How It Works
 
@@ -314,7 +328,7 @@ This server is published to multiple registries for easy installation:
 
 Fortnox refresh tokens are single-use — each token refresh returns a new one. The server automatically persists the latest refresh token to `~/.fortnox-mcp/tokens.json` so it survives process restarts without requiring manual config updates.
 
-- On first run, the server reads `FORTNOX_REFRESH_TOKEN` from your environment/config
+- On first run, the server uses `FORTNOX_REFRESH_TOKEN` if provided, otherwise opens a one-time browser OAuth bootstrap flow
 - After each token refresh, the new refresh token is saved to `~/.fortnox-mcp/tokens.json`
 - On subsequent restarts, the server uses the persisted token (which is always the latest)
 - If the persisted file is missing or corrupt, the server falls back to the environment variable
@@ -337,6 +351,7 @@ npm run release:major
 ```
 
 The release script automatically:
+
 1. Bumps the version in `package.json`
 2. Updates `server.json` for the MCP Registry
 3. Builds the project
@@ -346,6 +361,7 @@ The release script automatically:
 7. Pushes to GitHub
 
 **Prerequisites for releasing:**
+
 - `npm login` - Logged into npm
 - `mcp-publisher login github` - Logged into MCP Registry
 - Clean git working directory
@@ -374,19 +390,20 @@ Want to host your own instance of the Fortnox MCP server? Follow these instructi
 
 In your Vercel project settings, add these environment variables:
 
-| Variable | Description |
-|----------|-------------|
-| `AUTH_MODE` | Set to `remote` |
-| `SERVER_URL` | Your Vercel deployment URL (e.g., `https://your-app.vercel.app`) |
-| `JWT_SECRET` | A random secret string for signing tokens (generate with `openssl rand -hex 32`) |
-| `FORTNOX_CLIENT_ID` | Your Fortnox app client ID |
-| `FORTNOX_CLIENT_SECRET` | Your Fortnox app client secret |
-| `UPSTASH_REDIS_REST_URL` | Upstash Redis REST URL |
-| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST token |
+| Variable                   | Description                                                                      |
+| -------------------------- | -------------------------------------------------------------------------------- |
+| `AUTH_MODE`                | Set to `remote`                                                                  |
+| `SERVER_URL`               | Your Vercel deployment URL (e.g., `https://your-app.vercel.app`)                 |
+| `JWT_SECRET`               | A random secret string for signing tokens (generate with `openssl rand -hex 32`) |
+| `FORTNOX_CLIENT_ID`        | Your Fortnox app client ID                                                       |
+| `FORTNOX_CLIENT_SECRET`    | Your Fortnox app client secret                                                   |
+| `UPSTASH_REDIS_REST_URL`   | Upstash Redis REST URL                                                           |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis REST token                                                         |
 
 #### 3. Configure Fortnox OAuth Callback
 
 In your Fortnox app settings, add this redirect URI:
+
 ```
 https://your-app.vercel.app/oauth/fortnox/callback
 ```
@@ -399,14 +416,14 @@ vercel --prod
 
 ### Server Endpoints
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /health` | Health check |
-| `GET /.well-known/oauth-authorization-server` | OAuth metadata |
-| `POST /authorize` | Start OAuth flow |
-| `POST /token` | Exchange code for tokens |
-| `GET /oauth/fortnox/callback` | Fortnox OAuth callback |
-| `POST /mcp` | Protected MCP endpoint |
+| Endpoint                                      | Description              |
+| --------------------------------------------- | ------------------------ |
+| `GET /health`                                 | Health check             |
+| `GET /.well-known/oauth-authorization-server` | OAuth metadata           |
+| `POST /authorize`                             | Start OAuth flow         |
+| `POST /token`                                 | Exchange code for tokens |
+| `GET /oauth/fortnox/callback`                 | Fortnox OAuth callback   |
+| `POST /mcp`                                   | Protected MCP endpoint   |
 
 ### Architecture
 
