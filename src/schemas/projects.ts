@@ -156,6 +156,54 @@ export const GetCostCenterSchema = z.object({
 export type GetCostCenterInput = z.infer<typeof GetCostCenterSchema>;
 
 /**
+ * Schema for creating a cost center
+ */
+export const CreateCostCenterSchema = z.object({
+  code: z.string().min(1).max(6)
+    .describe("Cost center code (required, max 6 chars)"),
+  description: z.string().min(1)
+    .describe("Cost center description (required)"),
+  note: z.string().optional()
+    .describe("Additional notes"),
+  active: z.boolean().optional()
+    .describe("Whether the cost center is active (default: true)"),
+  response_format: z.nativeEnum(ResponseFormat).default(ResponseFormat.MARKDOWN)
+    .describe("Output format: 'markdown' or 'json'")
+}).strict();
+
+export type CreateCostCenterInput = z.infer<typeof CreateCostCenterSchema>;
+
+/**
+ * Schema for updating a cost center
+ */
+export const UpdateCostCenterSchema = z.object({
+  code: z.string().min(1).max(6)
+    .describe("Cost center code to update (required)"),
+  description: z.string().min(1).optional()
+    .describe("New description"),
+  note: z.string().optional()
+    .describe("Updated notes"),
+  active: z.boolean().optional()
+    .describe("Set active/inactive status"),
+  response_format: z.nativeEnum(ResponseFormat).default(ResponseFormat.MARKDOWN)
+    .describe("Output format: 'markdown' or 'json'")
+}).strict();
+
+export type UpdateCostCenterInput = z.infer<typeof UpdateCostCenterSchema>;
+
+/**
+ * Schema for deleting a cost center
+ */
+export const DeleteCostCenterSchema = z.object({
+  code: z.string().min(1).max(6)
+    .describe("Cost center code to delete (required)"),
+  response_format: z.nativeEnum(ResponseFormat).default(ResponseFormat.MARKDOWN)
+    .describe("Output format: 'markdown' or 'json'")
+}).strict();
+
+export type DeleteCostCenterInput = z.infer<typeof DeleteCostCenterSchema>;
+
+/**
  * Schema for listing financial years
  */
 export const ListFinancialYearsSchema = z.object({
