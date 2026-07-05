@@ -121,7 +121,77 @@ That's it! You can now ask Claude to manage your Fortnox invoices, customers, an
 - `fortnox_approve_supplier_invoice` - Approve supplier invoice for payment
 - `fortnox_payables_report` - Get accounts payable aging report
 
+### Invoice Payments
+
+- `fortnox_list_invoice_payments` - List customer invoice payments
+- `fortnox_get_invoice_payment` - Get payment details
+- `fortnox_create_invoice_payment` - Register a payment for a customer invoice
+- `fortnox_delete_invoice_payment` - Remove an invoice payment
+- `fortnox_bookkeep_invoice_payment` - Bookkeep an invoice payment
+
+### Supplier Invoice Payments
+
+- `fortnox_list_supplier_invoice_payments` - List supplier invoice payments
+- `fortnox_get_supplier_invoice_payment` - Get supplier payment details
+- `fortnox_create_supplier_invoice_payment` - Register a supplier invoice payment
+- `fortnox_delete_supplier_invoice_payment` - Remove a supplier invoice payment
+- `fortnox_bookkeep_supplier_invoice_payment` - Bookkeep a supplier invoice payment
+
 ### Order Management
+
+- `fortnox_list_orders` - List sales orders with filtering
+- `fortnox_list_offers` - List offers/quotes with filtering
+
+### Article Management
+
+- `fortnox_list_articles` - List and search articles/products
+- `fortnox_get_article` - Get article details
+- `fortnox_create_article` - Create new article
+- `fortnox_update_article` - Update article
+- `fortnox_delete_article` - Delete article
+
+### Project Management
+
+- `fortnox_list_projects` - List projects
+- `fortnox_get_project` - Get project details
+- `fortnox_create_project` - Create new project
+- `fortnox_update_project` - Update project
+- `fortnox_delete_project` - Delete project
+
+### Cost Center Management
+
+- `fortnox_list_cost_centers` - List all cost centers
+- `fortnox_get_cost_center` - Get cost center details
+- `fortnox_create_cost_center` - Create new cost center
+- `fortnox_update_cost_center` - Update cost center
+- `fortnox_delete_cost_center` - Delete cost center
+
+### Contract Management
+
+- `fortnox_list_contracts` - List recurring contracts
+- `fortnox_get_contract` - Get contract details with rows
+- `fortnox_create_contract` - Create new recurring contract
+- `fortnox_update_contract` - Update contract
+- `fortnox_create_invoice_from_contract` - Generate invoice from a contract
+- `fortnox_finish_contract` - Mark a contract as finished
+
+### Currency Management
+
+- `fortnox_list_currencies` - List all configured currencies
+- `fortnox_get_currency` - Get currency exchange rates
+- `fortnox_create_currency` - Add a new currency
+- `fortnox_update_currency` - Update exchange rates
+- `fortnox_delete_currency` - Remove a currency
+
+### Terms of Payment
+
+- `fortnox_list_terms_of_payment` - List all payment terms
+- `fortnox_get_terms_of_payment` - Get specific payment term
+- `fortnox_create_terms_of_payment` - Create new payment term
+- `fortnox_update_terms_of_payment` - Update payment term
+- `fortnox_delete_terms_of_payment` - Delete payment term
+
+### Account Management
 
 - `fortnox_list_orders` - List sales orders with filtering
 - `fortnox_list_offers` - List offers/quotes with filtering
