@@ -50,6 +50,7 @@ import { registerSupplierInvoicePaymentTools } from "./tools/supplierInvoicePaym
 import { registerProjectTools } from "./tools/projects.js";
 import { registerCostCenterTools } from "./tools/costCenters.js";
 import { registerContractTools } from "./tools/contracts.js";
+import { registerCurrencyTools } from "./tools/currencies.js";
 
 function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -73,6 +74,7 @@ function createMcpServer(): McpServer {
   registerProjectTools(server);
   registerCostCenterTools(server);
   registerContractTools(server);
+  registerCurrencyTools(server);
 
   return server;
 }
