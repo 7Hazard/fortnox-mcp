@@ -6,7 +6,7 @@ import {
   buildErrorResponse,
   formatMoney,
   formatDisplayDate,
-  buildPaginationMeta
+  buildPaginationMeta,
 } from "../services/formatters.js";
 import {
   ListInvoicePaymentsSchema,
@@ -18,7 +18,7 @@ import {
   type GetInvoicePaymentInput,
   type CreateInvoicePaymentInput,
   type DeleteInvoicePaymentInput,
-  type BookkeepInvoicePaymentInput
+  type BookkeepInvoicePaymentInput,
 } from "../schemas/payments.js";
 
 // API response types
@@ -89,35 +89,45 @@ Examples:
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: ListInvoicePaymentsInput) => {
       try {
-        const queryParams: Record<string, string | number | boolean | undefined> = {
+        const queryParams: Record<
+          string,
+          string | number | boolean | undefined
+        > = {
           limit: params.limit,
-          page: params.page
+          page: params.page,
         };
-        if (params.invoice_number) queryParams.invoicenumber = params.invoice_number;
+        if (params.invoice_number)
+          queryParams.invoicenumber = params.invoice_number;
 
         const response = await fortnoxRequest<InvoicePaymentListResponse>(
           "/3/invoicepayments",
           "GET",
           undefined,
-          queryParams
+          queryParams,
         );
         const payments = response.InvoicePayments || [];
-        const total = response.MetaInformation?.["@TotalResources"] || payments.length;
+        const total =
+          response.MetaInformation?.["@TotalResources"] || payments.length;
 
         const output = {
-          ...buildPaginationMeta(total, params.page, params.limit, payments.length),
+          ...buildPaginationMeta(
+            total,
+            params.page,
+            params.limit,
+            payments.length,
+          ),
           payments: payments.map((p) => ({
             payment_number: p.Number,
             invoice_number: p.InvoiceNumber,
             amount: p.Amount ?? null,
             payment_date: p.PaymentDate || null,
-            booked: p.Booked ?? null
-          }))
+            booked: p.Booked ?? null,
+          })),
         };
 
         let textContent: string;
@@ -128,9 +138,9 @@ Examples:
           for (const p of payments) {
             lines.push(
               `## Payment ${p.Number} — Invoice #${p.InvoiceNumber}\n` +
-              `- **Amount**: ${formatMoney(p.Amount)}\n` +
-              `- **Date**: ${formatDisplayDate(p.PaymentDate)}\n` +
-              `- **Booked**: ${p.Booked ? "Yes" : "No"}`
+                `- **Amount**: ${formatMoney(p.Amount)}\n` +
+                `- **Date**: ${formatDisplayDate(p.PaymentDate)}\n` +
+                `- **Booked**: ${p.Booked ? "Yes" : "No"}`,
             );
           }
           textContent = lines.join("\n");
@@ -140,7 +150,7 @@ Examples:
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Get single payment
@@ -161,13 +171,13 @@ Returns:
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: GetInvoicePaymentInput) => {
       try {
         const response = await fortnoxRequest<InvoicePaymentResponse>(
-          `/3/invoicepayments/${encodeURIComponent(params.payment_number)}`
+          `/3/invoicepayments/${encodeURIComponent(params.payment_number)}`,
         );
         const p = response.InvoicePayment;
 
@@ -183,24 +193,29 @@ Returns:
           customer_name: p.InvoiceCustomerName || null,
           invoice_total: p.InvoiceTotal || null,
           voucher_number: p.VoucherNumber || null,
-          voucher_series: p.VoucherSeries || null
+          voucher_series: p.VoucherSeries || null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `# Invoice Payment ${p.Number}\n\n` +
-            `- **Invoice**: #${p.InvoiceNumber}${p.InvoiceCustomerName ? ` (${p.InvoiceCustomerName})` : ""}\n` +
-            `- **Amount**: ${formatMoney(p.Amount)}\n` +
-            `- **Date**: ${formatDisplayDate(p.PaymentDate)}\n` +
-            (p.ModeOfPayment ? `- **Payment Method**: ${p.ModeOfPayment}\n` : "") +
-            `- **Booked**: ${p.Booked ? "Yes" : "No"}\n` +
-            (p.VoucherSeries && p.VoucherNumber ? `- **Voucher**: ${p.VoucherSeries}${p.VoucherNumber}\n` : "");
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `# Invoice Payment ${p.Number}\n\n` +
+              `- **Invoice**: #${p.InvoiceNumber}${p.InvoiceCustomerName ? ` (${p.InvoiceCustomerName})` : ""}\n` +
+              `- **Amount**: ${formatMoney(p.Amount)}\n` +
+              `- **Date**: ${formatDisplayDate(p.PaymentDate)}\n` +
+              (p.ModeOfPayment
+                ? `- **Payment Method**: ${p.ModeOfPayment}\n`
+                : "") +
+              `- **Booked**: ${p.Booked ? "Yes" : "No"}\n` +
+              (p.VoucherSeries && p.VoucherNumber
+                ? `- **Voucher**: ${p.VoucherSeries}${p.VoucherNumber}\n`
+                : "");
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Create payment
@@ -231,26 +246,30 @@ Example:
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: false,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: CreateInvoicePaymentInput) => {
       try {
         const paymentData: Record<string, unknown> = {
           InvoiceNumber: params.invoice_number,
-          PaymentDate: params.payment_date
+          PaymentDate: params.payment_date,
         };
 
         if (params.amount !== undefined) paymentData.Amount = params.amount;
-        if (params.mode_of_payment !== undefined) paymentData.ModeOfPayment = params.mode_of_payment;
-        if (params.mode_of_payment_account !== undefined) paymentData.ModeOfPaymentAccount = params.mode_of_payment_account;
-        if (params.currency !== undefined) paymentData.Currency = params.currency;
-        if (params.currency_rate !== undefined) paymentData.CurrencyRate = params.currency_rate;
+        if (params.mode_of_payment !== undefined)
+          paymentData.ModeOfPayment = params.mode_of_payment;
+        if (params.mode_of_payment_account !== undefined)
+          paymentData.ModeOfPaymentAccount = params.mode_of_payment_account;
+        if (params.currency !== undefined)
+          paymentData.Currency = params.currency;
+        if (params.currency_rate !== undefined)
+          paymentData.CurrencyRate = params.currency_rate;
 
         const response = await fortnoxRequest<InvoicePaymentResponse>(
           "/3/invoicepayments",
           "POST",
-          { InvoicePayment: paymentData }
+          { InvoicePayment: paymentData },
         );
         const p = response.InvoicePayment;
 
@@ -259,23 +278,24 @@ Example:
           invoice_number: p.InvoiceNumber,
           amount: p.Amount ?? null,
           payment_date: p.PaymentDate || null,
-          booked: p.Booked ?? null
+          booked: p.Booked ?? null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Invoice Payment Registered\n\n` +
-            `- **Payment Number**: ${p.Number}\n` +
-            `- **Invoice**: #${p.InvoiceNumber}\n` +
-            `- **Amount**: ${formatMoney(p.Amount)}\n` +
-            `- **Date**: ${formatDisplayDate(p.PaymentDate)}\n` +
-            `- **Booked**: ${p.Booked ? "Yes" : "No"}`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Invoice Payment Registered\n\n` +
+              `- **Payment Number**: ${p.Number}\n` +
+              `- **Invoice**: #${p.InvoiceNumber}\n` +
+              `- **Amount**: ${formatMoney(p.Amount)}\n` +
+              `- **Date**: ${formatDisplayDate(p.PaymentDate)}\n` +
+              `- **Booked**: ${p.Booked ? "Yes" : "No"}`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Delete payment
@@ -298,27 +318,28 @@ Returns:
         readOnlyHint: false,
         destructiveHint: true,
         idempotentHint: false,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: DeleteInvoicePaymentInput) => {
       try {
         await fortnoxRequest<void>(
           `/3/invoicepayments/${encodeURIComponent(params.payment_number)}`,
-          "DELETE"
+          "DELETE",
         );
 
         const output = { deleted: true, payment_number: params.payment_number };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Invoice Payment Deleted\n\nPayment **${params.payment_number}** has been removed.`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Invoice Payment Deleted\n\nPayment **${params.payment_number}** has been removed.`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Bookkeep payment
@@ -339,15 +360,15 @@ Returns:
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: BookkeepInvoicePaymentInput) => {
       try {
         const response = await fortnoxRequest<InvoicePaymentResponse>(
           `/3/invoicepayments/${encodeURIComponent(params.payment_number)}/bookkeep`,
           "PUT",
-          {}
+          {},
         );
         const p = response.InvoicePayment;
 
@@ -357,21 +378,24 @@ Returns:
           amount: p.Amount ?? null,
           booked: p.Booked ?? null,
           voucher_series: p.VoucherSeries || null,
-          voucher_number: p.VoucherNumber || null
+          voucher_number: p.VoucherNumber || null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Invoice Payment Booked\n\n` +
-            `- **Payment**: ${p.Number}\n` +
-            `- **Invoice**: #${p.InvoiceNumber}\n` +
-            `- **Amount**: ${formatMoney(p.Amount)}\n` +
-            (p.VoucherSeries && p.VoucherNumber ? `- **Voucher**: ${p.VoucherSeries}${p.VoucherNumber}\n` : "");
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Invoice Payment Booked\n\n` +
+              `- **Payment**: ${p.Number}\n` +
+              `- **Invoice**: #${p.InvoiceNumber}\n` +
+              `- **Amount**: ${formatMoney(p.Amount)}\n` +
+              (p.VoucherSeries && p.VoucherNumber
+                ? `- **Voucher**: ${p.VoucherSeries}${p.VoucherNumber}\n`
+                : "");
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 }

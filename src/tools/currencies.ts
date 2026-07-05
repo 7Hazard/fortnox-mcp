@@ -1,7 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { fortnoxRequest } from "../services/api.js";
 import { ResponseFormat } from "../constants.js";
-import { buildToolResponse, buildErrorResponse } from "../services/formatters.js";
+import {
+  buildToolResponse,
+  buildErrorResponse,
+} from "../services/formatters.js";
 import {
   ListCurrenciesSchema,
   GetCurrencySchema,
@@ -12,7 +15,7 @@ import {
   type GetCurrencyInput,
   type CreateCurrencyInput,
   type UpdateCurrencyInput,
-  type DeleteCurrencyInput
+  type DeleteCurrencyInput,
 } from "../schemas/currencies.js";
 
 interface FortnoxCurrency {
@@ -48,11 +51,17 @@ Args:
 Returns:
   All currencies with code, description, and exchange rates.`,
       inputSchema: ListCurrenciesSchema,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
     },
     async (params: ListCurrenciesInput) => {
       try {
-        const response = await fortnoxRequest<CurrencyListResponse>("/3/currencies");
+        const response =
+          await fortnoxRequest<CurrencyListResponse>("/3/currencies");
         const currencies = response.Currencies || [];
 
         const output = {
@@ -64,8 +73,8 @@ Returns:
             sell_rate: c.SellRate ?? null,
             unit: c.Unit ?? null,
             date: c.Date || null,
-            is_automatic: c.IsAutomatic ?? null
-          }))
+            is_automatic: c.IsAutomatic ?? null,
+          })),
         };
 
         let textContent: string;
@@ -76,8 +85,12 @@ Returns:
           for (const c of currencies) {
             lines.push(
               `## ${c.Code} — ${c.Description}\n` +
-              (c.BuyRate !== undefined ? `- **Buy Rate**: ${c.BuyRate}\n` : "") +
-              (c.SellRate !== undefined ? `- **Sell Rate**: ${c.SellRate}` : "")
+                (c.BuyRate !== undefined
+                  ? `- **Buy Rate**: ${c.BuyRate}\n`
+                  : "") +
+                (c.SellRate !== undefined
+                  ? `- **Sell Rate**: ${c.SellRate}`
+                  : ""),
             );
           }
           textContent = lines.join("\n");
@@ -87,7 +100,7 @@ Returns:
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Get
@@ -104,12 +117,17 @@ Args:
 Returns:
   Currency details with current exchange rates.`,
       inputSchema: GetCurrencySchema,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
     },
     async (params: GetCurrencyInput) => {
       try {
         const response = await fortnoxRequest<CurrencyResponse>(
-          `/3/currencies/${encodeURIComponent(params.code)}`
+          `/3/currencies/${encodeURIComponent(params.code)}`,
         );
         const c = response.Currency;
 
@@ -120,22 +138,27 @@ Returns:
           sell_rate: c.SellRate ?? null,
           unit: c.Unit ?? null,
           date: c.Date || null,
-          is_automatic: c.IsAutomatic ?? null
+          is_automatic: c.IsAutomatic ?? null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `# ${c.Code} — ${c.Description}\n\n` +
-            (c.BuyRate !== undefined ? `- **Buy Rate**: ${c.BuyRate}\n` : "") +
-            (c.SellRate !== undefined ? `- **Sell Rate**: ${c.SellRate}\n` : "") +
-            (c.Unit !== undefined ? `- **Unit**: ${c.Unit}\n` : "") +
-            (c.Date ? `- **Date**: ${c.Date}\n` : "");
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `# ${c.Code} — ${c.Description}\n\n` +
+              (c.BuyRate !== undefined
+                ? `- **Buy Rate**: ${c.BuyRate}\n`
+                : "") +
+              (c.SellRate !== undefined
+                ? `- **Sell Rate**: ${c.SellRate}\n`
+                : "") +
+              (c.Unit !== undefined ? `- **Unit**: ${c.Unit}\n` : "") +
+              (c.Date ? `- **Date**: ${c.Date}\n` : "");
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Create
@@ -156,32 +179,48 @@ Args:
 Returns:
   The created currency.`,
       inputSchema: CreateCurrencySchema,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     async (params: CreateCurrencyInput) => {
       try {
-        const data: Record<string, unknown> = { Code: params.code, Description: params.description };
+        const data: Record<string, unknown> = {
+          Code: params.code,
+          Description: params.description,
+        };
         if (params.buy_rate !== undefined) data.BuyRate = params.buy_rate;
         if (params.sell_rate !== undefined) data.SellRate = params.sell_rate;
         if (params.unit !== undefined) data.Unit = params.unit;
 
         const response = await fortnoxRequest<CurrencyResponse>(
-          "/3/currencies", "POST", { Currency: data }
+          "/3/currencies",
+          "POST",
+          { Currency: data },
         );
         const c = response.Currency;
 
-        const output = { code: c.Code, description: c.Description, buy_rate: c.BuyRate ?? null, sell_rate: c.SellRate ?? null };
+        const output = {
+          code: c.Code,
+          description: c.Description,
+          buy_rate: c.BuyRate ?? null,
+          sell_rate: c.SellRate ?? null,
+        };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Currency Created\n\n- **Code**: ${c.Code}\n- **Description**: ${c.Description}\n` +
-            (c.BuyRate !== undefined ? `- **Buy Rate**: ${c.BuyRate}\n` : "");
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Currency Created\n\n- **Code**: ${c.Code}\n- **Description**: ${c.Description}\n` +
+              (c.BuyRate !== undefined ? `- **Buy Rate**: ${c.BuyRate}\n` : "");
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Update
@@ -202,32 +241,46 @@ Args:
 Returns:
   The updated currency.`,
       inputSchema: UpdateCurrencySchema,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
     },
     async (params: UpdateCurrencyInput) => {
       try {
         const data: Record<string, unknown> = {};
-        if (params.description !== undefined) data.Description = params.description;
+        if (params.description !== undefined)
+          data.Description = params.description;
         if (params.buy_rate !== undefined) data.BuyRate = params.buy_rate;
         if (params.sell_rate !== undefined) data.SellRate = params.sell_rate;
         if (params.unit !== undefined) data.Unit = params.unit;
 
         const response = await fortnoxRequest<CurrencyResponse>(
-          `/3/currencies/${encodeURIComponent(params.code)}`, "PUT", { Currency: data }
+          `/3/currencies/${encodeURIComponent(params.code)}`,
+          "PUT",
+          { Currency: data },
         );
         const c = response.Currency;
 
-        const output = { code: c.Code, description: c.Description, buy_rate: c.BuyRate ?? null, sell_rate: c.SellRate ?? null };
+        const output = {
+          code: c.Code,
+          description: c.Description,
+          buy_rate: c.BuyRate ?? null,
+          sell_rate: c.SellRate ?? null,
+        };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Currency Updated\n\n- **Code**: ${c.Code}\n- **Buy Rate**: ${c.BuyRate ?? "-"}\n- **Sell Rate**: ${c.SellRate ?? "-"}`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Currency Updated\n\n- **Code**: ${c.Code}\n- **Buy Rate**: ${c.BuyRate ?? "-"}\n- **Sell Rate**: ${c.SellRate ?? "-"}`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Delete
@@ -243,22 +296,31 @@ Args:
   - code (string): Currency code to delete (required)
   - response_format ('markdown' | 'json'): Output format`,
       inputSchema: DeleteCurrencySchema,
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true }
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     async (params: DeleteCurrencyInput) => {
       try {
-        await fortnoxRequest<void>(`/3/currencies/${encodeURIComponent(params.code)}`, "DELETE");
+        await fortnoxRequest<void>(
+          `/3/currencies/${encodeURIComponent(params.code)}`,
+          "DELETE",
+        );
 
         const output = { deleted: true, code: params.code };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Currency Deleted\n\nCurrency **${params.code}** has been removed.`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Currency Deleted\n\nCurrency **${params.code}** has been removed.`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 }

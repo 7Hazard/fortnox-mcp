@@ -6,7 +6,7 @@ import {
   buildErrorResponse,
   formatDisplayDate,
   formatListMarkdown,
-  buildPaginationMeta
+  buildPaginationMeta,
 } from "../services/formatters.js";
 import {
   ListProjectsSchema,
@@ -18,7 +18,7 @@ import {
   type GetProjectInput,
   type CreateProjectInput,
   type UpdateProjectInput,
-  type DeleteProjectInput
+  type DeleteProjectInput,
 } from "../schemas/projects.js";
 
 // API response types
@@ -70,35 +70,44 @@ Returns:
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: ListProjectsInput) => {
       try {
-        const queryParams: Record<string, string | number | boolean | undefined> = {
+        const queryParams: Record<
+          string,
+          string | number | boolean | undefined
+        > = {
           limit: params.limit,
-          page: params.page
+          page: params.page,
         };
 
         const response = await fortnoxRequest<ProjectListResponse>(
           "/3/projects",
           "GET",
           undefined,
-          queryParams
+          queryParams,
         );
         const projects = response.Projects || [];
-        const total = response.MetaInformation?.["@TotalResources"] || projects.length;
+        const total =
+          response.MetaInformation?.["@TotalResources"] || projects.length;
 
         const output = {
-          ...buildPaginationMeta(total, params.page, params.limit, projects.length),
+          ...buildPaginationMeta(
+            total,
+            params.page,
+            params.limit,
+            projects.length,
+          ),
           projects: projects.map((p) => ({
             project_number: p.ProjectNumber,
             description: p.Description,
             status: p.Status || null,
             start_date: p.StartDate || null,
             end_date: p.EndDate || null,
-            project_leader: p.ProjectLeader || null
-          }))
+            project_leader: p.ProjectLeader || null,
+          })),
         };
 
         let textContent: string;
@@ -114,9 +123,13 @@ Returns:
             (p) =>
               `## ${p.Description} (${p.ProjectNumber})\n` +
               (p.Status ? `- **Status**: ${p.Status}\n` : "") +
-              (p.StartDate ? `- **Start**: ${formatDisplayDate(p.StartDate)}\n` : "") +
-              (p.EndDate ? `- **End**: ${formatDisplayDate(p.EndDate)}\n` : "") +
-              (p.ProjectLeader ? `- **Leader**: ${p.ProjectLeader}` : "")
+              (p.StartDate
+                ? `- **Start**: ${formatDisplayDate(p.StartDate)}\n`
+                : "") +
+              (p.EndDate
+                ? `- **End**: ${formatDisplayDate(p.EndDate)}\n`
+                : "") +
+              (p.ProjectLeader ? `- **Leader**: ${p.ProjectLeader}` : ""),
           );
         }
 
@@ -124,7 +137,7 @@ Returns:
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Get
@@ -145,13 +158,13 @@ Returns:
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: GetProjectInput) => {
       try {
         const response = await fortnoxRequest<ProjectResponse>(
-          `/3/projects/${encodeURIComponent(params.project_number)}`
+          `/3/projects/${encodeURIComponent(params.project_number)}`,
         );
         const p = response.Project;
 
@@ -163,24 +176,29 @@ Returns:
           end_date: p.EndDate || null,
           project_leader: p.ProjectLeader || null,
           contact_person: p.ContactPerson || null,
-          comments: p.Comments || null
+          comments: p.Comments || null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `# Project: ${p.Description} (${p.ProjectNumber})\n\n` +
-            (p.Status ? `- **Status**: ${p.Status}\n` : "") +
-            (p.StartDate ? `- **Start**: ${formatDisplayDate(p.StartDate)}\n` : "") +
-            (p.EndDate ? `- **End**: ${formatDisplayDate(p.EndDate)}\n` : "") +
-            (p.ProjectLeader ? `- **Leader**: ${p.ProjectLeader}\n` : "") +
-            (p.ContactPerson ? `- **Contact**: ${p.ContactPerson}\n` : "") +
-            (p.Comments ? `- **Comments**: ${p.Comments}\n` : "");
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `# Project: ${p.Description} (${p.ProjectNumber})\n\n` +
+              (p.Status ? `- **Status**: ${p.Status}\n` : "") +
+              (p.StartDate
+                ? `- **Start**: ${formatDisplayDate(p.StartDate)}\n`
+                : "") +
+              (p.EndDate
+                ? `- **End**: ${formatDisplayDate(p.EndDate)}\n`
+                : "") +
+              (p.ProjectLeader ? `- **Leader**: ${p.ProjectLeader}\n` : "") +
+              (p.ContactPerson ? `- **Contact**: ${p.ContactPerson}\n` : "") +
+              (p.Comments ? `- **Comments**: ${p.Comments}\n` : "");
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Create
@@ -208,46 +226,53 @@ Returns:
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: false,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: CreateProjectInput) => {
       try {
         const projectData: Record<string, unknown> = {
-          Description: params.description
+          Description: params.description,
         };
 
-        if (params.project_number !== undefined) projectData.ProjectNumber = params.project_number;
+        if (params.project_number !== undefined)
+          projectData.ProjectNumber = params.project_number;
         if (params.status !== undefined) projectData.Status = params.status;
-        if (params.start_date !== undefined) projectData.StartDate = params.start_date;
-        if (params.end_date !== undefined) projectData.EndDate = params.end_date;
-        if (params.project_leader !== undefined) projectData.ProjectLeader = params.project_leader;
-        if (params.contact_person !== undefined) projectData.ContactPerson = params.contact_person;
-        if (params.comments !== undefined) projectData.Comments = params.comments;
+        if (params.start_date !== undefined)
+          projectData.StartDate = params.start_date;
+        if (params.end_date !== undefined)
+          projectData.EndDate = params.end_date;
+        if (params.project_leader !== undefined)
+          projectData.ProjectLeader = params.project_leader;
+        if (params.contact_person !== undefined)
+          projectData.ContactPerson = params.contact_person;
+        if (params.comments !== undefined)
+          projectData.Comments = params.comments;
 
         const response = await fortnoxRequest<ProjectResponse>(
           "/3/projects",
           "POST",
-          { Project: projectData }
+          { Project: projectData },
         );
         const p = response.Project;
 
         const output = {
           project_number: p.ProjectNumber,
           description: p.Description,
-          status: p.Status || null
+          status: p.Status || null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Project Created\n\n- **Number**: ${p.ProjectNumber}\n- **Description**: ${p.Description}\n` +
-            (p.Status ? `- **Status**: ${p.Status}\n` : "");
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Project Created\n\n- **Number**: ${p.ProjectNumber}\n- **Description**: ${p.Description}\n` +
+              (p.Status ? `- **Status**: ${p.Status}\n` : "");
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Update
@@ -275,44 +300,51 @@ Returns:
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: UpdateProjectInput) => {
       try {
         const projectData: Record<string, unknown> = {};
 
-        if (params.description !== undefined) projectData.Description = params.description;
+        if (params.description !== undefined)
+          projectData.Description = params.description;
         if (params.status !== undefined) projectData.Status = params.status;
-        if (params.start_date !== undefined) projectData.StartDate = params.start_date;
-        if (params.end_date !== undefined) projectData.EndDate = params.end_date;
-        if (params.project_leader !== undefined) projectData.ProjectLeader = params.project_leader;
-        if (params.contact_person !== undefined) projectData.ContactPerson = params.contact_person;
-        if (params.comments !== undefined) projectData.Comments = params.comments;
+        if (params.start_date !== undefined)
+          projectData.StartDate = params.start_date;
+        if (params.end_date !== undefined)
+          projectData.EndDate = params.end_date;
+        if (params.project_leader !== undefined)
+          projectData.ProjectLeader = params.project_leader;
+        if (params.contact_person !== undefined)
+          projectData.ContactPerson = params.contact_person;
+        if (params.comments !== undefined)
+          projectData.Comments = params.comments;
 
         const response = await fortnoxRequest<ProjectResponse>(
           `/3/projects/${encodeURIComponent(params.project_number)}`,
           "PUT",
-          { Project: projectData }
+          { Project: projectData },
         );
         const p = response.Project;
 
         const output = {
           project_number: p.ProjectNumber,
           description: p.Description,
-          status: p.Status || null
+          status: p.Status || null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Project Updated\n\n- **Number**: ${p.ProjectNumber}\n- **Description**: ${p.Description}\n` +
-            (p.Status ? `- **Status**: ${p.Status}\n` : "");
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Project Updated\n\n- **Number**: ${p.ProjectNumber}\n- **Description**: ${p.Description}\n` +
+              (p.Status ? `- **Status**: ${p.Status}\n` : "");
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Delete
@@ -335,26 +367,27 @@ Returns:
         readOnlyHint: false,
         destructiveHint: true,
         idempotentHint: false,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: DeleteProjectInput) => {
       try {
         await fortnoxRequest<void>(
           `/3/projects/${encodeURIComponent(params.project_number)}`,
-          "DELETE"
+          "DELETE",
         );
 
         const output = { deleted: true, project_number: params.project_number };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Project Deleted\n\nProject **${params.project_number}** has been permanently deleted.`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Project Deleted\n\nProject **${params.project_number}** has been permanently deleted.`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 }

@@ -4,7 +4,7 @@ import { ResponseFormat } from "../constants.js";
 import {
   buildToolResponse,
   buildErrorResponse,
-  formatBoolean
+  formatBoolean,
 } from "../services/formatters.js";
 import {
   ListCostCentersSchema,
@@ -16,7 +16,7 @@ import {
   type GetCostCenterInput,
   type CreateCostCenterInput,
   type UpdateCostCenterInput,
-  type DeleteCostCenterInput
+  type DeleteCostCenterInput,
 } from "../schemas/projects.js";
 
 // API response types
@@ -57,12 +57,13 @@ Returns:
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: ListCostCentersInput) => {
       try {
-        const response = await fortnoxRequest<CostCenterListResponse>("/3/costcenters");
+        const response =
+          await fortnoxRequest<CostCenterListResponse>("/3/costcenters");
         const centers = response.CostCenters || [];
 
         const output = {
@@ -71,8 +72,8 @@ Returns:
             code: c.Code,
             description: c.Description,
             active: c.Active ?? null,
-            note: c.Note || null
-          }))
+            note: c.Note || null,
+          })),
         };
 
         let textContent: string;
@@ -83,8 +84,8 @@ Returns:
           for (const c of centers) {
             lines.push(
               `## ${c.Description} (${c.Code})\n` +
-              `- **Active**: ${formatBoolean(c.Active)}` +
-              (c.Note ? `\n- **Note**: ${c.Note}` : "")
+                `- **Active**: ${formatBoolean(c.Active)}` +
+                (c.Note ? `\n- **Note**: ${c.Note}` : ""),
             );
           }
           textContent = lines.join("\n");
@@ -94,7 +95,7 @@ Returns:
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Get
@@ -115,13 +116,13 @@ Returns:
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: GetCostCenterInput) => {
       try {
         const response = await fortnoxRequest<CostCenterResponse>(
-          `/3/costcenters/${encodeURIComponent(params.code)}`
+          `/3/costcenters/${encodeURIComponent(params.code)}`,
         );
         const c = response.CostCenter;
 
@@ -129,20 +130,21 @@ Returns:
           code: c.Code,
           description: c.Description,
           active: c.Active ?? null,
-          note: c.Note || null
+          note: c.Note || null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `# Cost Center: ${c.Description} (${c.Code})\n\n` +
-            `- **Active**: ${formatBoolean(c.Active)}\n` +
-            (c.Note ? `- **Note**: ${c.Note}\n` : "");
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `# Cost Center: ${c.Description} (${c.Code})\n\n` +
+              `- **Active**: ${formatBoolean(c.Active)}\n` +
+              (c.Note ? `- **Note**: ${c.Note}\n` : "");
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Create
@@ -166,14 +168,14 @@ Returns:
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: false,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: CreateCostCenterInput) => {
       try {
         const data: Record<string, unknown> = {
           Code: params.code,
-          Description: params.description
+          Description: params.description,
         };
         if (params.note !== undefined) data.Note = params.note;
         if (params.active !== undefined) data.Active = params.active;
@@ -181,21 +183,26 @@ Returns:
         const response = await fortnoxRequest<CostCenterResponse>(
           "/3/costcenters",
           "POST",
-          { CostCenter: data }
+          { CostCenter: data },
         );
         const c = response.CostCenter;
 
-        const output = { code: c.Code, description: c.Description, active: c.Active ?? null };
+        const output = {
+          code: c.Code,
+          description: c.Description,
+          active: c.Active ?? null,
+        };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Cost Center Created\n\n- **Code**: ${c.Code}\n- **Description**: ${c.Description}\n- **Active**: ${formatBoolean(c.Active)}`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Cost Center Created\n\n- **Code**: ${c.Code}\n- **Description**: ${c.Description}\n- **Active**: ${formatBoolean(c.Active)}`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Update
@@ -219,34 +226,40 @@ Returns:
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: UpdateCostCenterInput) => {
       try {
         const data: Record<string, unknown> = {};
-        if (params.description !== undefined) data.Description = params.description;
+        if (params.description !== undefined)
+          data.Description = params.description;
         if (params.note !== undefined) data.Note = params.note;
         if (params.active !== undefined) data.Active = params.active;
 
         const response = await fortnoxRequest<CostCenterResponse>(
           `/3/costcenters/${encodeURIComponent(params.code)}`,
           "PUT",
-          { CostCenter: data }
+          { CostCenter: data },
         );
         const c = response.CostCenter;
 
-        const output = { code: c.Code, description: c.Description, active: c.Active ?? null };
+        const output = {
+          code: c.Code,
+          description: c.Description,
+          active: c.Active ?? null,
+        };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Cost Center Updated\n\n- **Code**: ${c.Code}\n- **Description**: ${c.Description}\n- **Active**: ${formatBoolean(c.Active)}`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Cost Center Updated\n\n- **Code**: ${c.Code}\n- **Description**: ${c.Description}\n- **Active**: ${formatBoolean(c.Active)}`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Delete
@@ -269,26 +282,27 @@ Returns:
         readOnlyHint: false,
         destructiveHint: true,
         idempotentHint: false,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: DeleteCostCenterInput) => {
       try {
         await fortnoxRequest<void>(
           `/3/costcenters/${encodeURIComponent(params.code)}`,
-          "DELETE"
+          "DELETE",
         );
 
         const output = { deleted: true, code: params.code };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Cost Center Deleted\n\nCost center **${params.code}** has been permanently deleted.`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Cost Center Deleted\n\nCost center **${params.code}** has been permanently deleted.`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 }

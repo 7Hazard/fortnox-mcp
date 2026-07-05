@@ -8,7 +8,7 @@ import {
   formatBoolean,
   formatListMarkdown,
   formatDetailMarkdown,
-  buildPaginationMeta
+  buildPaginationMeta,
 } from "../services/formatters.js";
 import {
   ListArticlesSchema,
@@ -20,7 +20,7 @@ import {
   type GetArticleInput,
   type CreateArticleInput,
   type UpdateArticleInput,
-  type DeleteArticleInput
+  type DeleteArticleInput,
 } from "../schemas/articles.js";
 
 // API response types
@@ -100,26 +100,42 @@ Examples:
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: ListArticlesInput) => {
       try {
-        const queryParams: Record<string, string | number | boolean | undefined> = {
+        const queryParams: Record<
+          string,
+          string | number | boolean | undefined
+        > = {
           limit: params.limit,
-          page: params.page
+          page: params.page,
         };
 
         if (params.filter) queryParams.filter = params.filter;
-        if (params.search_description) queryParams.description = params.search_description;
-        if (params.article_number) queryParams.articlenumber = params.article_number;
+        if (params.search_description)
+          queryParams.description = params.search_description;
+        if (params.article_number)
+          queryParams.articlenumber = params.article_number;
 
-        const response = await fortnoxRequest<ArticleListResponse>("/3/articles", "GET", undefined, queryParams);
+        const response = await fortnoxRequest<ArticleListResponse>(
+          "/3/articles",
+          "GET",
+          undefined,
+          queryParams,
+        );
         const articles = response.Articles || [];
-        const total = response.MetaInformation?.["@TotalResources"] || articles.length;
+        const total =
+          response.MetaInformation?.["@TotalResources"] || articles.length;
 
         const output = {
-          ...buildPaginationMeta(total, params.page, params.limit, articles.length),
+          ...buildPaginationMeta(
+            total,
+            params.page,
+            params.limit,
+            articles.length,
+          ),
           articles: articles.map((a) => ({
             article_number: a.ArticleNumber,
             description: a.Description,
@@ -127,8 +143,8 @@ Examples:
             sales_price: a.SalesPrice ?? null,
             vat: a.VAT ?? null,
             unit: a.Unit || null,
-            active: a.Active ?? null
-          }))
+            active: a.Active ?? null,
+          })),
         };
 
         let textContent: string;
@@ -144,10 +160,12 @@ Examples:
             (a) =>
               `## ${a.Description} (${a.ArticleNumber})\n` +
               (a.Type ? `- **Type**: ${a.Type}\n` : "") +
-              (a.SalesPrice !== undefined ? `- **Price**: ${formatMoney(a.SalesPrice)}\n` : "") +
+              (a.SalesPrice !== undefined
+                ? `- **Price**: ${formatMoney(a.SalesPrice)}\n`
+                : "") +
               (a.VAT !== undefined ? `- **VAT**: ${a.VAT}%\n` : "") +
               (a.Unit ? `- **Unit**: ${a.Unit}\n` : "") +
-              `- **Active**: ${formatBoolean(a.Active)}`
+              `- **Active**: ${formatBoolean(a.Active)}`,
           );
         }
 
@@ -155,7 +173,7 @@ Examples:
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Get single article
@@ -176,13 +194,13 @@ Returns:
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: GetArticleInput) => {
       try {
         const response = await fortnoxRequest<ArticleResponse>(
-          `/3/articles/${encodeURIComponent(params.article_number)}`
+          `/3/articles/${encodeURIComponent(params.article_number)}`,
         );
         const a = response.Article;
 
@@ -201,7 +219,7 @@ Returns:
           active: a.Active ?? null,
           stock_goods: a.StockGoods ?? null,
           quantity_in_stock: a.QuantityInStock ?? null,
-          note: a.Note || null
+          note: a.Note || null,
         };
 
         let textContent: string;
@@ -214,7 +232,10 @@ Returns:
             { label: "Type", value: a.Type },
             { label: "Sales Price", value: formatMoney(a.SalesPrice) },
             { label: "Purchase Price", value: formatMoney(a.PurchasePrice) },
-            { label: "VAT", value: a.VAT !== undefined ? `${a.VAT}%` : undefined },
+            {
+              label: "VAT",
+              value: a.VAT !== undefined ? `${a.VAT}%` : undefined,
+            },
             { label: "Unit", value: a.Unit },
             { label: "Sales Account", value: a.SalesAccount },
             { label: "Purchase Account", value: a.PurchaseAccount },
@@ -222,7 +243,7 @@ Returns:
             { label: "Export Account", value: a.ExportAccount },
             { label: "Active", value: a.Active },
             { label: "Stock Goods", value: a.StockGoods },
-            { label: "Qty in Stock", value: a.QuantityInStock }
+            { label: "Qty in Stock", value: a.QuantityInStock },
           ]);
         }
 
@@ -230,7 +251,7 @@ Returns:
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Create article
@@ -263,32 +284,40 @@ Returns:
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: false,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: CreateArticleInput) => {
       try {
         const articleData: Record<string, unknown> = {
-          Description: params.description
+          Description: params.description,
         };
 
-        if (params.article_number !== undefined) articleData.ArticleNumber = params.article_number;
+        if (params.article_number !== undefined)
+          articleData.ArticleNumber = params.article_number;
         if (params.type !== undefined) articleData.Type = params.type;
-        if (params.sales_price !== undefined) articleData.SalesPrice = params.sales_price;
-        if (params.purchase_price !== undefined) articleData.PurchasePrice = params.purchase_price;
+        if (params.sales_price !== undefined)
+          articleData.SalesPrice = params.sales_price;
+        if (params.purchase_price !== undefined)
+          articleData.PurchasePrice = params.purchase_price;
         if (params.vat !== undefined) articleData.VAT = params.vat;
         if (params.unit !== undefined) articleData.Unit = params.unit;
-        if (params.sales_account !== undefined) articleData.SalesAccount = params.sales_account;
-        if (params.purchase_account !== undefined) articleData.PurchaseAccount = params.purchase_account;
-        if (params.eu_account !== undefined) articleData.EUAccount = params.eu_account;
-        if (params.export_account !== undefined) articleData.ExportAccount = params.export_account;
-        if (params.stock_goods !== undefined) articleData.StockGoods = params.stock_goods;
+        if (params.sales_account !== undefined)
+          articleData.SalesAccount = params.sales_account;
+        if (params.purchase_account !== undefined)
+          articleData.PurchaseAccount = params.purchase_account;
+        if (params.eu_account !== undefined)
+          articleData.EUAccount = params.eu_account;
+        if (params.export_account !== undefined)
+          articleData.ExportAccount = params.export_account;
+        if (params.stock_goods !== undefined)
+          articleData.StockGoods = params.stock_goods;
         if (params.note !== undefined) articleData.Note = params.note;
 
         const response = await fortnoxRequest<ArticleResponse>(
           "/3/articles",
           "POST",
-          { Article: articleData }
+          { Article: articleData },
         );
         const a = response.Article;
 
@@ -299,21 +328,24 @@ Returns:
           sales_price: a.SalesPrice ?? null,
           vat: a.VAT ?? null,
           unit: a.Unit || null,
-          active: a.Active ?? null
+          active: a.Active ?? null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Article Created\n\n- **Article Number**: ${a.ArticleNumber}\n- **Description**: ${a.Description}\n` +
-            (a.Type ? `- **Type**: ${a.Type}\n` : "") +
-            (a.SalesPrice !== undefined ? `- **Sales Price**: ${formatMoney(a.SalesPrice)}\n` : "") +
-            (a.VAT !== undefined ? `- **VAT**: ${a.VAT}%\n` : "");
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Article Created\n\n- **Article Number**: ${a.ArticleNumber}\n- **Description**: ${a.Description}\n` +
+              (a.Type ? `- **Type**: ${a.Type}\n` : "") +
+              (a.SalesPrice !== undefined
+                ? `- **Sales Price**: ${formatMoney(a.SalesPrice)}\n`
+                : "") +
+              (a.VAT !== undefined ? `- **VAT**: ${a.VAT}%\n` : "");
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Update article
@@ -342,26 +374,30 @@ Returns:
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: UpdateArticleInput) => {
       try {
         const articleData: Record<string, unknown> = {};
 
-        if (params.description !== undefined) articleData.Description = params.description;
-        if (params.sales_price !== undefined) articleData.SalesPrice = params.sales_price;
-        if (params.purchase_price !== undefined) articleData.PurchasePrice = params.purchase_price;
+        if (params.description !== undefined)
+          articleData.Description = params.description;
+        if (params.sales_price !== undefined)
+          articleData.SalesPrice = params.sales_price;
+        if (params.purchase_price !== undefined)
+          articleData.PurchasePrice = params.purchase_price;
         if (params.vat !== undefined) articleData.VAT = params.vat;
         if (params.unit !== undefined) articleData.Unit = params.unit;
-        if (params.sales_account !== undefined) articleData.SalesAccount = params.sales_account;
+        if (params.sales_account !== undefined)
+          articleData.SalesAccount = params.sales_account;
         if (params.active !== undefined) articleData.Active = params.active;
         if (params.note !== undefined) articleData.Note = params.note;
 
         const response = await fortnoxRequest<ArticleResponse>(
           `/3/articles/${encodeURIComponent(params.article_number)}`,
           "PUT",
-          { Article: articleData }
+          { Article: articleData },
         );
         const a = response.Article;
 
@@ -372,20 +408,23 @@ Returns:
           sales_price: a.SalesPrice ?? null,
           vat: a.VAT ?? null,
           unit: a.Unit || null,
-          active: a.Active ?? null
+          active: a.Active ?? null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Article Updated\n\n- **Article Number**: ${a.ArticleNumber}\n- **Description**: ${a.Description}\n` +
-            (a.SalesPrice !== undefined ? `- **Sales Price**: ${formatMoney(a.SalesPrice)}\n` : "") +
-            `- **Active**: ${formatBoolean(a.Active)}`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Article Updated\n\n- **Article Number**: ${a.ArticleNumber}\n- **Description**: ${a.Description}\n` +
+              (a.SalesPrice !== undefined
+                ? `- **Sales Price**: ${formatMoney(a.SalesPrice)}\n`
+                : "") +
+              `- **Active**: ${formatBoolean(a.Active)}`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Delete article
@@ -408,29 +447,30 @@ Returns:
         readOnlyHint: false,
         destructiveHint: true,
         idempotentHint: false,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: DeleteArticleInput) => {
       try {
         await fortnoxRequest<void>(
           `/3/articles/${encodeURIComponent(params.article_number)}`,
-          "DELETE"
+          "DELETE",
         );
 
         const output = {
           deleted: true,
-          article_number: params.article_number
+          article_number: params.article_number,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Article Deleted\n\nArticle **${params.article_number}** has been permanently deleted.`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Article Deleted\n\nArticle **${params.article_number}** has been permanently deleted.`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 }

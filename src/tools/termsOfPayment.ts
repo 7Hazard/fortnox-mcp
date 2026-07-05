@@ -1,7 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { fortnoxRequest } from "../services/api.js";
 import { ResponseFormat } from "../constants.js";
-import { buildToolResponse, buildErrorResponse } from "../services/formatters.js";
+import {
+  buildToolResponse,
+  buildErrorResponse,
+} from "../services/formatters.js";
 import {
   ListTermsOfPaymentSchema,
   GetTermsOfPaymentSchema,
@@ -12,7 +15,7 @@ import {
   type GetTermsOfPaymentInput,
   type CreateTermsOfPaymentInput,
   type UpdateTermsOfPaymentInput,
-  type DeleteTermsOfPaymentInput
+  type DeleteTermsOfPaymentInput,
 } from "../schemas/termsOfPayment.js";
 
 interface FortnoxTermsOfPayment {
@@ -46,16 +49,27 @@ Returns:
 Examples:
   Common codes: '0' (immediate), '10' (10 days), '30' (30 days net)`,
       inputSchema: ListTermsOfPaymentSchema,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
     },
     async (params: ListTermsOfPaymentInput) => {
       try {
-        const response = await fortnoxRequest<TermsOfPaymentListResponse>("/3/termsofpayments");
+        const response =
+          await fortnoxRequest<TermsOfPaymentListResponse>(
+            "/3/termsofpayments",
+          );
         const terms = response.TermsOfPayments || [];
 
         const output = {
           count: terms.length,
-          terms_of_payment: terms.map((t) => ({ code: t.Code, description: t.Description }))
+          terms_of_payment: terms.map((t) => ({
+            code: t.Code,
+            description: t.Description,
+          })),
         };
 
         let textContent: string;
@@ -73,7 +87,7 @@ Examples:
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Get
@@ -87,26 +101,32 @@ Args:
   - code (string): Payment term code (required)
   - response_format ('markdown' | 'json'): Output format`,
       inputSchema: GetTermsOfPaymentSchema,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
     },
     async (params: GetTermsOfPaymentInput) => {
       try {
         const response = await fortnoxRequest<TermsOfPaymentResponse>(
-          `/3/termsofpayments/${encodeURIComponent(params.code)}`
+          `/3/termsofpayments/${encodeURIComponent(params.code)}`,
         );
         const t = response.TermsOfPayment;
 
         const output = { code: t.Code, description: t.Description };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `# Terms of Payment: ${t.Code}\n\n- **Description**: ${t.Description}`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `# Terms of Payment: ${t.Code}\n\n- **Description**: ${t.Description}`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Create
@@ -121,28 +141,39 @@ Args:
   - description (string): Human-readable description (required)
   - response_format ('markdown' | 'json'): Output format`,
       inputSchema: CreateTermsOfPaymentSchema,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     async (params: CreateTermsOfPaymentInput) => {
       try {
         const response = await fortnoxRequest<TermsOfPaymentResponse>(
           "/3/termsofpayments",
           "POST",
-          { TermsOfPayment: { Code: params.code, Description: params.description } }
+          {
+            TermsOfPayment: {
+              Code: params.code,
+              Description: params.description,
+            },
+          },
         );
         const t = response.TermsOfPayment;
 
         const output = { code: t.Code, description: t.Description };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Terms of Payment Created\n\n- **Code**: ${t.Code}\n- **Description**: ${t.Description}`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Terms of Payment Created\n\n- **Code**: ${t.Code}\n- **Description**: ${t.Description}`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Update
@@ -157,28 +188,34 @@ Args:
   - description (string): New description (required)
   - response_format ('markdown' | 'json'): Output format`,
       inputSchema: UpdateTermsOfPaymentSchema,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
     },
     async (params: UpdateTermsOfPaymentInput) => {
       try {
         const response = await fortnoxRequest<TermsOfPaymentResponse>(
           `/3/termsofpayments/${encodeURIComponent(params.code)}`,
           "PUT",
-          { TermsOfPayment: { Description: params.description } }
+          { TermsOfPayment: { Description: params.description } },
         );
         const t = response.TermsOfPayment;
 
         const output = { code: t.Code, description: t.Description };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Terms of Payment Updated\n\n- **Code**: ${t.Code}\n- **Description**: ${t.Description}`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Terms of Payment Updated\n\n- **Code**: ${t.Code}\n- **Description**: ${t.Description}`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Delete
@@ -194,25 +231,31 @@ Args:
   - code (string): Payment term code to delete (required)
   - response_format ('markdown' | 'json'): Output format`,
       inputSchema: DeleteTermsOfPaymentSchema,
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true }
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     async (params: DeleteTermsOfPaymentInput) => {
       try {
         await fortnoxRequest<void>(
           `/3/termsofpayments/${encodeURIComponent(params.code)}`,
-          "DELETE"
+          "DELETE",
         );
 
         const output = { deleted: true, code: params.code };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Terms of Payment Deleted\n\nPayment term **${params.code}** has been removed.`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Terms of Payment Deleted\n\nPayment term **${params.code}** has been removed.`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 }

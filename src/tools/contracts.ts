@@ -7,7 +7,7 @@ import {
   formatMoney,
   formatDisplayDate,
   formatBoolean,
-  buildPaginationMeta
+  buildPaginationMeta,
 } from "../services/formatters.js";
 import {
   ListContractsSchema,
@@ -19,7 +19,7 @@ import {
   type GetContractInput,
   type CreateContractInput,
   type UpdateContractInput,
-  type ContractActionInput
+  type ContractActionInput,
 } from "../schemas/contracts.js";
 
 // API response types
@@ -120,14 +120,17 @@ Returns:
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: ListContractsInput) => {
       try {
-        const queryParams: Record<string, string | number | boolean | undefined> = {
+        const queryParams: Record<
+          string,
+          string | number | boolean | undefined
+        > = {
           limit: params.limit,
-          page: params.page
+          page: params.page,
         };
         if (params.filter) queryParams.filter = params.filter;
 
@@ -135,13 +138,19 @@ Returns:
           "/3/contracts",
           "GET",
           undefined,
-          queryParams
+          queryParams,
         );
         const contracts = response.Contracts || [];
-        const total = response.MetaInformation?.["@TotalResources"] || contracts.length;
+        const total =
+          response.MetaInformation?.["@TotalResources"] || contracts.length;
 
         const output = {
-          ...buildPaginationMeta(total, params.page, params.limit, contracts.length),
+          ...buildPaginationMeta(
+            total,
+            params.page,
+            params.limit,
+            contracts.length,
+          ),
           contracts: contracts.map((c) => ({
             document_number: c.DocumentNumber,
             customer_number: c.CustomerNumber,
@@ -152,8 +161,8 @@ Returns:
             total: c.Total ?? null,
             invoice_interval: c.Invoiceinterval ?? null,
             invoices_remaining: c.InvoicesRemaining ?? null,
-            last_invoice_date: c.LastInvoiceDate || null
-          }))
+            last_invoice_date: c.LastInvoiceDate || null,
+          })),
         };
 
         let textContent: string;
@@ -164,10 +173,14 @@ Returns:
           for (const c of contracts) {
             lines.push(
               `## Contract ${c.DocumentNumber} — ${c.CustomerName || c.CustomerNumber}\n` +
-              (c.Status ? `- **Status**: ${c.Status}\n` : "") +
-              `- **Period**: ${formatDisplayDate(c.PeriodStart)} – ${formatDisplayDate(c.PeriodEnd)}\n` +
-              (c.Total !== undefined ? `- **Total**: ${formatMoney(c.Total)}\n` : "") +
-              (c.Invoiceinterval ? `- **Interval**: every ${c.Invoiceinterval} month(s)\n` : "")
+                (c.Status ? `- **Status**: ${c.Status}\n` : "") +
+                `- **Period**: ${formatDisplayDate(c.PeriodStart)} – ${formatDisplayDate(c.PeriodEnd)}\n` +
+                (c.Total !== undefined
+                  ? `- **Total**: ${formatMoney(c.Total)}\n`
+                  : "") +
+                (c.Invoiceinterval
+                  ? `- **Interval**: every ${c.Invoiceinterval} month(s)\n`
+                  : ""),
             );
           }
           textContent = lines.join("\n");
@@ -177,7 +190,7 @@ Returns:
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Get
@@ -198,13 +211,13 @@ Returns:
         readOnlyHint: true,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: GetContractInput) => {
       try {
         const response = await fortnoxRequest<ContractResponse>(
-          `/3/contracts/${encodeURIComponent(params.document_number)}`
+          `/3/contracts/${encodeURIComponent(params.document_number)}`,
         );
         const c = response.Contract;
 
@@ -229,30 +242,40 @@ Returns:
             price: r.Price ?? null,
             quantity: r.DeliveredQuantity || null,
             unit: r.Unit || null,
-            vat: r.VAT ?? null
-          }))
+            vat: r.VAT ?? null,
+          })),
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `# Contract ${c.DocumentNumber}\n\n` +
-            `- **Customer**: ${c.CustomerName || c.CustomerNumber}\n` +
-            `- **Period**: ${formatDisplayDate(c.PeriodStart)} – ${formatDisplayDate(c.PeriodEnd)}\n` +
-            (c.InvoiceInterval !== undefined ? `- **Invoice Interval**: ${c.InvoiceInterval} month(s)\n` : "") +
-            `- **Continuous**: ${formatBoolean(c.Continuous)}\n` +
-            (c.Status ? `- **Status**: ${c.Status}\n` : "") +
-            (c.Total !== undefined ? `- **Total**: ${formatMoney(c.Total)}\n` : "") +
-            (c.LastInvoiceDate ? `- **Last Invoice**: ${formatDisplayDate(c.LastInvoiceDate)}\n` : "") +
-            `\n### Rows\n` +
-            (c.InvoiceRows || []).map((r) =>
-              `- ${r.Description || r.ArticleNumber || "–"}: ${r.DeliveredQuantity || "1"} × ${formatMoney(r.Price)} (${r.VAT ?? 0}% VAT)`
-            ).join("\n");
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `# Contract ${c.DocumentNumber}\n\n` +
+              `- **Customer**: ${c.CustomerName || c.CustomerNumber}\n` +
+              `- **Period**: ${formatDisplayDate(c.PeriodStart)} – ${formatDisplayDate(c.PeriodEnd)}\n` +
+              (c.InvoiceInterval !== undefined
+                ? `- **Invoice Interval**: ${c.InvoiceInterval} month(s)\n`
+                : "") +
+              `- **Continuous**: ${formatBoolean(c.Continuous)}\n` +
+              (c.Status ? `- **Status**: ${c.Status}\n` : "") +
+              (c.Total !== undefined
+                ? `- **Total**: ${formatMoney(c.Total)}\n`
+                : "") +
+              (c.LastInvoiceDate
+                ? `- **Last Invoice**: ${formatDisplayDate(c.LastInvoiceDate)}\n`
+                : "") +
+              `\n### Rows\n` +
+              (c.InvoiceRows || [])
+                .map(
+                  (r) =>
+                    `- ${r.Description || r.ArticleNumber || "–"}: ${r.DeliveredQuantity || "1"} × ${formatMoney(r.Price)} (${r.VAT ?? 0}% VAT)`,
+                )
+                .join("\n");
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Create
@@ -282,8 +305,8 @@ Returns:
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: false,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: CreateContractInput) => {
       try {
@@ -292,35 +315,47 @@ Returns:
           PeriodEnd: params.period_end,
           InvoiceRows: params.invoice_rows.map((r) => {
             const row: Record<string, unknown> = {};
-            if (r.article_number !== undefined) row.ArticleNumber = r.article_number;
+            if (r.article_number !== undefined)
+              row.ArticleNumber = r.article_number;
             if (r.description !== undefined) row.Description = r.description;
             if (r.price !== undefined) row.Price = r.price;
-            if (r.delivered_quantity !== undefined) row.DeliveredQuantity = r.delivered_quantity;
+            if (r.delivered_quantity !== undefined)
+              row.DeliveredQuantity = r.delivered_quantity;
             if (r.unit !== undefined) row.Unit = r.unit;
             if (r.vat !== undefined) row.VAT = r.vat;
-            if (r.account_number !== undefined) row.AccountNumber = r.account_number;
+            if (r.account_number !== undefined)
+              row.AccountNumber = r.account_number;
             if (r.discount !== undefined) row.Discount = r.discount;
-            if (r.discount_type !== undefined) row.DiscountType = r.discount_type;
+            if (r.discount_type !== undefined)
+              row.DiscountType = r.discount_type;
             if (r.cost_center !== undefined) row.CostCenter = r.cost_center;
             if (r.project !== undefined) row.Project = r.project;
             return row;
-          })
+          }),
         };
 
-        if (params.period_start !== undefined) contractData.PeriodStart = params.period_start;
-        if (params.invoice_interval !== undefined) contractData.InvoiceInterval = params.invoice_interval;
-        if (params.continuous !== undefined) contractData.Continuous = params.continuous;
-        if (params.contract_date !== undefined) contractData.ContractDate = params.contract_date;
-        if (params.our_reference !== undefined) contractData.OurReference = params.our_reference;
-        if (params.your_reference !== undefined) contractData.YourReference = params.your_reference;
-        if (params.terms_of_payment !== undefined) contractData.TermsOfPayment = params.terms_of_payment;
-        if (params.comments !== undefined) contractData.Comments = params.comments;
+        if (params.period_start !== undefined)
+          contractData.PeriodStart = params.period_start;
+        if (params.invoice_interval !== undefined)
+          contractData.InvoiceInterval = params.invoice_interval;
+        if (params.continuous !== undefined)
+          contractData.Continuous = params.continuous;
+        if (params.contract_date !== undefined)
+          contractData.ContractDate = params.contract_date;
+        if (params.our_reference !== undefined)
+          contractData.OurReference = params.our_reference;
+        if (params.your_reference !== undefined)
+          contractData.YourReference = params.your_reference;
+        if (params.terms_of_payment !== undefined)
+          contractData.TermsOfPayment = params.terms_of_payment;
+        if (params.comments !== undefined)
+          contractData.Comments = params.comments;
         if (params.remarks !== undefined) contractData.Remarks = params.remarks;
 
         const response = await fortnoxRequest<ContractResponse>(
           "/3/contracts",
           "POST",
-          { Contract: contractData }
+          { Contract: contractData },
         );
         const c = response.Contract;
 
@@ -329,22 +364,25 @@ Returns:
           customer_number: c.CustomerNumber,
           customer_name: c.CustomerName || null,
           period_end: c.PeriodEnd,
-          total: c.Total ?? null
+          total: c.Total ?? null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Contract Created\n\n` +
-            `- **Document**: ${c.DocumentNumber}\n` +
-            `- **Customer**: ${c.CustomerName || c.CustomerNumber}\n` +
-            `- **Period End**: ${formatDisplayDate(c.PeriodEnd)}\n` +
-            (c.Total !== undefined ? `- **Total**: ${formatMoney(c.Total)}\n` : "");
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Contract Created\n\n` +
+              `- **Document**: ${c.DocumentNumber}\n` +
+              `- **Customer**: ${c.CustomerName || c.CustomerNumber}\n` +
+              `- **Period End**: ${formatDisplayDate(c.PeriodEnd)}\n` +
+              (c.Total !== undefined
+                ? `- **Total**: ${formatMoney(c.Total)}\n`
+                : "");
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Update
@@ -374,29 +412,37 @@ Returns:
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: UpdateContractInput) => {
       try {
         const contractData: Record<string, unknown> = {};
 
-        if (params.period_end !== undefined) contractData.PeriodEnd = params.period_end;
-        if (params.invoice_interval !== undefined) contractData.InvoiceInterval = params.invoice_interval;
-        if (params.continuous !== undefined) contractData.Continuous = params.continuous;
-        if (params.our_reference !== undefined) contractData.OurReference = params.our_reference;
-        if (params.comments !== undefined) contractData.Comments = params.comments;
+        if (params.period_end !== undefined)
+          contractData.PeriodEnd = params.period_end;
+        if (params.invoice_interval !== undefined)
+          contractData.InvoiceInterval = params.invoice_interval;
+        if (params.continuous !== undefined)
+          contractData.Continuous = params.continuous;
+        if (params.our_reference !== undefined)
+          contractData.OurReference = params.our_reference;
+        if (params.comments !== undefined)
+          contractData.Comments = params.comments;
         if (params.invoice_rows !== undefined) {
           contractData.InvoiceRows = params.invoice_rows.map((r) => {
             const row: Record<string, unknown> = {};
             if (r.row_id !== undefined) row.RowId = r.row_id;
-            if (r.article_number !== undefined) row.ArticleNumber = r.article_number;
+            if (r.article_number !== undefined)
+              row.ArticleNumber = r.article_number;
             if (r.description !== undefined) row.Description = r.description;
             if (r.price !== undefined) row.Price = r.price;
-            if (r.delivered_quantity !== undefined) row.DeliveredQuantity = r.delivered_quantity;
+            if (r.delivered_quantity !== undefined)
+              row.DeliveredQuantity = r.delivered_quantity;
             if (r.unit !== undefined) row.Unit = r.unit;
             if (r.vat !== undefined) row.VAT = r.vat;
-            if (r.account_number !== undefined) row.AccountNumber = r.account_number;
+            if (r.account_number !== undefined)
+              row.AccountNumber = r.account_number;
             return row;
           });
         }
@@ -404,7 +450,7 @@ Returns:
         const response = await fortnoxRequest<ContractResponse>(
           `/3/contracts/${encodeURIComponent(params.document_number)}`,
           "PUT",
-          { Contract: contractData }
+          { Contract: contractData },
         );
         const c = response.Contract;
 
@@ -412,18 +458,19 @@ Returns:
           document_number: c.DocumentNumber,
           customer_number: c.CustomerNumber,
           period_end: c.PeriodEnd,
-          total: c.Total ?? null
+          total: c.Total ?? null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Contract Updated\n\n- **Document**: ${c.DocumentNumber}\n- **Customer**: ${c.CustomerName || c.CustomerNumber}\n- **Period End**: ${formatDisplayDate(c.PeriodEnd)}`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Contract Updated\n\n- **Document**: ${c.DocumentNumber}\n- **Customer**: ${c.CustomerName || c.CustomerNumber}\n- **Period End**: ${formatDisplayDate(c.PeriodEnd)}`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Create invoice from contract
@@ -446,15 +493,15 @@ Returns:
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: false,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: ContractActionInput) => {
       try {
         const response = await fortnoxRequest<InvoiceResponse>(
           `/3/contracts/${encodeURIComponent(params.document_number)}/createinvoice`,
           "PUT",
-          {}
+          {},
         );
         const inv = response.Invoice;
 
@@ -463,21 +510,24 @@ Returns:
           customer_number: inv.CustomerNumber,
           customer_name: inv.CustomerName || null,
           total: inv.Total ?? null,
-          invoice_date: inv.InvoiceDate || null
+          invoice_date: inv.InvoiceDate || null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Invoice Created from Contract\n\n` +
-            `- **Invoice Number**: ${inv.DocumentNumber}\n` +
-            `- **Customer**: ${inv.CustomerName || inv.CustomerNumber}\n` +
-            (inv.Total !== undefined ? `- **Total**: ${formatMoney(inv.Total)}\n` : "");
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Invoice Created from Contract\n\n` +
+              `- **Invoice Number**: ${inv.DocumentNumber}\n` +
+              `- **Customer**: ${inv.CustomerName || inv.CustomerNumber}\n` +
+              (inv.Total !== undefined
+                ? `- **Total**: ${formatMoney(inv.Total)}\n`
+                : "");
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 
   // Finish contract
@@ -498,32 +548,33 @@ Returns:
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,
-        openWorldHint: true
-      }
+        openWorldHint: true,
+      },
     },
     async (params: ContractActionInput) => {
       try {
         const response = await fortnoxRequest<ContractResponse>(
           `/3/contracts/${encodeURIComponent(params.document_number)}/finish`,
           "PUT",
-          {}
+          {},
         );
         const c = response.Contract;
 
         const output = {
           document_number: c.DocumentNumber,
           status: c.Status || null,
-          active: c.Active ?? null
+          active: c.Active ?? null,
         };
 
-        const textContent = params.response_format === ResponseFormat.JSON
-          ? JSON.stringify(output, null, 2)
-          : `## Contract Finished\n\n- **Document**: ${c.DocumentNumber}\n- **Status**: ${c.Status || "finished"}`;
+        const textContent =
+          params.response_format === ResponseFormat.JSON
+            ? JSON.stringify(output, null, 2)
+            : `## Contract Finished\n\n- **Document**: ${c.DocumentNumber}\n- **Status**: ${c.Status || "finished"}`;
 
         return buildToolResponse(textContent, output);
       } catch (error) {
         return buildErrorResponse(error);
       }
-    }
+    },
   );
 }
