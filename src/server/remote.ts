@@ -20,6 +20,14 @@ import { registerCompanyTools } from "../tools/company.js";
 import { registerAnalyticsTools } from "../tools/analytics.js";
 import { registerOrderTools } from "../tools/orders.js";
 import { registerBIAnalyticsTools } from "../tools/biAnalytics.js";
+import { registerArticleTools } from "../tools/articles.js";
+import { registerInvoicePaymentTools } from "../tools/invoicePayments.js";
+import { registerSupplierInvoicePaymentTools } from "../tools/supplierInvoicePayments.js";
+import { registerProjectTools } from "../tools/projects.js";
+import { registerCostCenterTools } from "../tools/costCenters.js";
+import { registerContractTools } from "../tools/contracts.js";
+import { registerCurrencyTools } from "../tools/currencies.js";
+import { registerTermsOfPaymentTools } from "../tools/termsOfPayment.js";
 import { ITokenStorage } from "../auth/storage/types.js";
 
 export interface RemoteServerOptions {
@@ -114,6 +122,14 @@ export function createRemoteServer(options: RemoteServerOptions): Express {
   registerAnalyticsTools(mcpServer);
   registerOrderTools(mcpServer);
   registerBIAnalyticsTools(mcpServer);
+  registerArticleTools(mcpServer);
+  registerInvoicePaymentTools(mcpServer);
+  registerSupplierInvoicePaymentTools(mcpServer);
+  registerProjectTools(mcpServer);
+  registerCostCenterTools(mcpServer);
+  registerContractTools(mcpServer);
+  registerCurrencyTools(mcpServer);
+  registerTermsOfPaymentTools(mcpServer);
 
   // Protected MCP endpoint
   app.post(

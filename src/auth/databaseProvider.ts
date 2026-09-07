@@ -2,7 +2,10 @@ import axios, { AxiosError } from "axios";
 import { FORTNOX_OAUTH_URL, TOKEN_REFRESH_BUFFER_MS } from "../constants.js";
 import { ITokenProvider, TokenInfo, AuthRequiredError } from "./types.js";
 import { ITokenStorage } from "./storage/types.js";
-import { getFortnoxCredentials } from "./credentials.js";
+import {
+  getFortnoxCredentials,
+  hasRequiredFortnoxScopes,
+} from "./credentials.js";
 
 // Token provider for remote mode (multi-user with database storage)
 export class DatabaseTokenProvider implements ITokenProvider {
@@ -26,6 +29,14 @@ export class DatabaseTokenProvider implements ITokenProvider {
     const tokens = await this.storage.get(userId);
     if (!tokens) {
       throw new AuthRequiredError(userId);
+    }
+
+    if (!hasRequiredFortnoxScopes(tokens.scope)) {
+      await this.storage.delete(userId);
+      throw new AuthRequiredError(
+        userId,
+        "Fortnox authorization must be renewed because the stored token has insufficient scopes",
+      );
     }
 
     const needsRefresh = Date.now() >= tokens.expiresAt - TOKEN_REFRESH_BUFFER_MS;
@@ -147,9 +158,20 @@ export class DatabaseTokenProvider implements ITokenProvider {
         scope: response.data.scope
       };
 
+      if (!hasRequiredFortnoxScopes(newTokens.scope)) {
+        await this.storage.delete(userId);
+        throw new AuthRequiredError(
+          userId,
+          "Fortnox authorization returned insufficient scopes",
+        );
+      }
+
       await this.storeTokens(userId, newTokens);
       return newTokens.accessToken;
     } catch (error) {
+      if (error instanceof AuthRequiredError) {
+        throw error;
+      }
       // Clear invalid tokens
       await this.storage.delete(userId);
       throw this.handleAuthError(error, "Failed to refresh access token");

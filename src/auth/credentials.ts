@@ -58,9 +58,38 @@ export function hasFortnoxCredentials(): boolean {
  * Fortnox OAuth scopes required by this MCP server
  */
 export const FORTNOX_SCOPES = [
+  "assets",
+  "archive",
+  "article",
+  "payment",
   "companyinformation",
   "customer",
+  "companylogo",
+  "inbox",
+  "settings",
+  "connectfile",
+  "costcenter",
   "invoice",
+  "noxfinansinvoice",
+  "warehouse",
+  "warehousecustomdocument",
   "supplier",
+  "supplierinvoice",
+  "salary",
+  "offer",
+  "order",
+  "price",
+  "profile",
+  "project",
   "bookkeeping",
+  "deletevoucher",
+  "timereporting",
+  "print",
+  "developerapi",
+  "currency",
 ];
+
+export function hasRequiredFortnoxScopes(scope: string): boolean {
+  const grantedScopes = new Set(scope.split(/\s+/).filter(Boolean));
+  return FORTNOX_SCOPES.every((requiredScope) => grantedScopes.has(requiredScope));
+}

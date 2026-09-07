@@ -1,7 +1,10 @@
 import axios, { AxiosError } from "axios";
 import { FORTNOX_OAUTH_URL, TOKEN_REFRESH_BUFFER_MS } from "../constants.js";
 import { ITokenProvider, TokenInfo, AuthRequiredError } from "./types.js";
-import { getFortnoxCredentials } from "./credentials.js";
+import {
+  getFortnoxCredentials,
+  hasRequiredFortnoxScopes,
+} from "./credentials.js";
 import {
   clearPersistedTokens,
   readPersistedTokens,
@@ -33,14 +36,16 @@ export class EnvVarTokenProvider implements ITokenProvider {
     const persisted = readPersistedTokens();
     const envRefreshToken = process.env.FORTNOX_REFRESH_TOKEN;
 
-    if (persisted?.refreshToken) {
+    if (persisted?.refreshToken && hasRequiredFortnoxScopes(persisted.scope || "")) {
       this.tokens = {
         accessToken: persisted.accessToken || "",
         refreshToken: persisted.refreshToken,
         expiresAt: persisted.expiresAt || 0,
         scope: persisted.scope || process.env.FORTNOX_SCOPE || "",
       };
-    } else if (envRefreshToken) {
+    } else if (persisted?.refreshToken) {
+      clearPersistedTokens();
+    } else if (envRefreshToken && hasRequiredFortnoxScopes(process.env.FORTNOX_SCOPE || "")) {
       this.tokens = {
         accessToken: process.env.FORTNOX_ACCESS_TOKEN || "",
         refreshToken: envRefreshToken,
@@ -156,6 +161,15 @@ export class EnvVarTokenProvider implements ITokenProvider {
           },
         },
       );
+
+      if (!hasRequiredFortnoxScopes(response.data.scope)) {
+        this.tokens = null;
+        clearPersistedTokens();
+        throw new AuthRequiredError(
+          undefined,
+          "Fortnox authorization returned insufficient scopes. Please re-authorize the application.",
+        );
+      }
 
       this.storeTokens(response.data);
       return this.tokens!.accessToken;
