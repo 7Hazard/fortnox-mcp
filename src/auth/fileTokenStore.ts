@@ -1,4 +1,10 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
+import {
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  unlinkSync,
+} from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
@@ -31,11 +37,23 @@ export function readPersistedTokens(): PersistedTokens | null {
   }
 }
 
+export function clearPersistedTokens(): void {
+  try {
+    if (existsSync(TOKEN_FILE)) {
+      unlinkSync(TOKEN_FILE);
+    }
+  } catch (error) {
+    console.error(
+      `[FortnoxAuth] Warning: Could not clear persisted tokens at ${TOKEN_FILE}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
 export function persistTokens(
   refreshToken: string,
   accessToken: string,
   expiresAt: number,
-  scope: string
+  scope: string,
 ): void {
   try {
     ensureDir();
@@ -51,7 +69,7 @@ export function persistTokens(
     });
   } catch (error) {
     console.error(
-      `[FortnoxAuth] Warning: Could not persist refresh token to ${TOKEN_FILE}: ${error instanceof Error ? error.message : String(error)}`
+      `[FortnoxAuth] Warning: Could not persist refresh token to ${TOKEN_FILE}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
 }

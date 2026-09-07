@@ -1,6 +1,11 @@
 import axios, { AxiosError, AxiosRequestConfig } from "axios";
-import { getTokenProvider } from "../auth/index.js";
+import {
+  AuthRequiredError,
+  EnvVarTokenProvider,
+  getTokenProvider,
+} from "../auth/index.js";
 import { getCurrentUserId } from "../auth/context.js";
+import { ensureLocalAuth } from "./auth.js";
 import {
   FORTNOX_API_BASE_URL,
   RATE_LIMIT_REQUESTS,
@@ -8,7 +13,7 @@ import {
   MAX_FETCH_ALL_RESULTS,
   MAX_FETCH_ALL_PAGES,
   FETCH_ALL_PAGE_SIZE,
-  FETCH_ALL_DELAY_MS
+  FETCH_ALL_DELAY_MS,
 } from "../constants.js";
 
 // Rate limiting state
@@ -22,7 +27,7 @@ async function waitForRateLimit(): Promise<void> {
 
   // Remove timestamps outside the window
   requestTimestamps = requestTimestamps.filter(
-    (ts) => now - ts < RATE_LIMIT_WINDOW_MS
+    (ts) => now - ts < RATE_LIMIT_WINDOW_MS,
   );
 
   // If at limit, wait for oldest request to expire
@@ -34,7 +39,7 @@ async function waitForRateLimit(): Promise<void> {
     }
     // Clean up again after waiting
     requestTimestamps = requestTimestamps.filter(
-      (ts) => Date.now() - ts < RATE_LIMIT_WINDOW_MS
+      (ts) => Date.now() - ts < RATE_LIMIT_WINDOW_MS,
     );
   }
 
@@ -49,16 +54,33 @@ export async function fortnoxRequest<T>(
   endpoint: string,
   method: "GET" | "POST" | "PUT" | "DELETE" = "GET",
   data?: unknown,
-  params?: Record<string, string | number | boolean | undefined>
+  params?: Record<string, string | number | boolean | undefined>,
 ): Promise<T> {
   await waitForRateLimit();
 
   // Get access token using the token provider
   // In local mode, userId is undefined and ignored
   // In remote mode, userId comes from the request context
-  const tokenProvider = getTokenProvider();
+  let tokenProvider = getTokenProvider();
   const userId = getCurrentUserId();
-  const accessToken = await tokenProvider.getAccessToken(userId);
+  let accessToken: string;
+
+  try {
+    accessToken = await tokenProvider.getAccessToken(userId);
+  } catch (error) {
+    if (
+      !(
+        tokenProvider instanceof EnvVarTokenProvider &&
+        error instanceof AuthRequiredError
+      )
+    ) {
+      throw error;
+    }
+
+    await ensureLocalAuth();
+    tokenProvider = getTokenProvider();
+    accessToken = await tokenProvider.getAccessToken(userId);
+  }
 
   // Clean undefined params
   const cleanParams: Record<string, string | number | boolean> = {};
@@ -74,13 +96,13 @@ export async function fortnoxRequest<T>(
     method,
     url: `${FORTNOX_API_BASE_URL}${endpoint}`,
     headers: {
-      "Authorization": `Bearer ${accessToken}`,
+      Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
-      "Accept": "application/json"
+      Accept: "application/json",
     },
     timeout: 30000,
     params: Object.keys(cleanParams).length > 0 ? cleanParams : undefined,
-    data
+    data,
   };
 
   try {
@@ -102,7 +124,8 @@ export function handleApiError(error: unknown, context?: string): Error {
     const data = error.response?.data;
 
     // Extract Fortnox-specific error message
-    const fortnoxError = data?.ErrorInformation?.message ||
+    const fortnoxError =
+      data?.ErrorInformation?.message ||
       data?.ErrorInformation?.Message ||
       data?.message ||
       data?.error;
@@ -111,50 +134,56 @@ export function handleApiError(error: unknown, context?: string): Error {
       case 400:
         return new Error(
           `${prefix}Bad request: ${fortnoxError || "Invalid parameters"}. ` +
-          `Check that all required fields are provided and values are valid.`
+            `Check that all required fields are provided and values are valid.`,
         );
       case 401:
         return new Error(
           `${prefix}Authentication failed. The access token may be expired or invalid. ` +
-          `Try refreshing authentication.`
+            `Try refreshing authentication.`,
         );
       case 403:
         return new Error(
           `${prefix}Permission denied. Your API credentials don't have access to this resource. ` +
-          `Check your Fortnox app scopes.`
+            `Check your Fortnox app scopes.`,
         );
       case 404:
         return new Error(
-          `${prefix}Resource not found. The requested item does not exist or has been deleted.`
+          `${prefix}Resource not found. The requested item does not exist or has been deleted.`,
         );
       case 429:
         return new Error(
           `${prefix}Rate limit exceeded. Fortnox allows 25 requests per 5 seconds. ` +
-          `Please wait before retrying.`
+            `Please wait before retrying.`,
         );
       case 500:
       case 502:
       case 503:
         return new Error(
           `${prefix}Fortnox server error (${status}). The service may be temporarily unavailable. ` +
-          `Please try again later.`
+            `Please try again later.`,
         );
       default:
         return new Error(
-          `${prefix}API error ${status}: ${fortnoxError || JSON.stringify(data)}`
+          `${prefix}API error ${status}: ${fortnoxError || JSON.stringify(data)}`,
         );
     }
   }
 
   if (error instanceof Error) {
-    if (error.message.includes("ECONNABORTED") || error.message.includes("timeout")) {
+    if (
+      error.message.includes("ECONNABORTED") ||
+      error.message.includes("timeout")
+    ) {
       return new Error(
-        `${prefix}Request timed out. The Fortnox API is not responding. Please try again.`
+        `${prefix}Request timed out. The Fortnox API is not responding. Please try again.`,
       );
     }
-    if (error.message.includes("ENOTFOUND") || error.message.includes("ECONNREFUSED")) {
+    if (
+      error.message.includes("ENOTFOUND") ||
+      error.message.includes("ECONNREFUSED")
+    ) {
       return new Error(
-        `${prefix}Cannot connect to Fortnox API. Check your internet connection.`
+        `${prefix}Cannot connect to Fortnox API. Check your internet connection.`,
       );
     }
     return new Error(`${prefix}${error.message}`);
@@ -211,7 +240,7 @@ export interface FetchAllResult<T> {
  * Delay execution for specified milliseconds
  */
 function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -240,7 +269,7 @@ export async function fetchAllPages<T, R>(
   params: Record<string, string | number | boolean | undefined>,
   extractItems: (response: R) => T[],
   extractTotal: (response: R) => number,
-  config?: FetchAllConfig
+  config?: FetchAllConfig,
 ): Promise<FetchAllResult<T>> {
   const maxResults = config?.maxResults ?? MAX_FETCH_ALL_RESULTS;
   const maxPages = config?.maxPages ?? MAX_FETCH_ALL_PAGES;
@@ -273,7 +302,7 @@ export async function fetchAllPages<T, R>(
     const response = await fortnoxRequest<R>(endpoint, "GET", undefined, {
       ...params,
       limit: pageSize,
-      page
+      page,
     });
 
     const items = extractItems(response);
@@ -302,6 +331,6 @@ export async function fetchAllPages<T, R>(
     total,
     pagesFetched: page,
     truncated,
-    truncationReason
+    truncationReason,
   };
 }

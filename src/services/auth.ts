@@ -96,6 +96,13 @@ async function waitForAuthorizationCode(
     const state = randomUUID();
     const timeoutMs = 10 * 60 * 1000;
     const redirectUri = `http://localhost:${LOCAL_OAUTH_CALLBACK_PORT}/callback`;
+    let settled = false;
+
+    const fail = (error: Error): void => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
 
     const server = createServer((req, res) => {
       try {
@@ -118,7 +125,7 @@ async function waitForAuthorizationCode(
           const details = errorDescription
             ? `${error} (${errorDescription})`
             : error;
-          reject(new Error(`Authorization failed: ${details}`));
+          fail(new Error(`Authorization failed: ${details}`));
           server.close();
           return;
         }
@@ -132,7 +139,7 @@ async function waitForAuthorizationCode(
         if (callbackState !== state) {
           res.writeHead(400, { "Content-Type": "text/plain" });
           res.end("Invalid OAuth state.");
-          reject(new Error("Invalid OAuth state"));
+          fail(new Error("Invalid OAuth state"));
           server.close();
           return;
         }
@@ -145,21 +152,21 @@ async function waitForAuthorizationCode(
         resolve({ code, redirectUri });
         server.close();
       } catch (error) {
-        reject(error instanceof Error ? error : new Error(String(error)));
+        fail(error instanceof Error ? error : new Error(String(error)));
         server.close();
       }
     });
 
     const timeout = setTimeout(() => {
+      fail(new Error("Timed out waiting for Fortnox OAuth callback."));
       server.close();
-      reject(new Error("Timed out waiting for Fortnox OAuth callback."));
     }, timeoutMs);
 
     server.on("close", () => clearTimeout(timeout));
     server.on("error", (error: NodeJS.ErrnoException) => {
       clearTimeout(timeout);
       if (error.code === "EADDRINUSE") {
-        reject(
+        fail(
           new Error(
             `Port ${LOCAL_OAUTH_CALLBACK_PORT} is already in use. ` +
               `Close the process using it or set FORTNOX_OAUTH_CALLBACK_PORT.`,
@@ -167,7 +174,7 @@ async function waitForAuthorizationCode(
         );
         return;
       }
-      reject(error);
+      fail(error);
     });
 
     server.listen(LOCAL_OAUTH_CALLBACK_PORT, "127.0.0.1", () => {
@@ -181,7 +188,7 @@ async function waitForAuthorizationCode(
 
       const authUrlString = authUrl.toString();
       console.error(
-        "[FortnoxMCP] No refresh token found. Starting one-time OAuth bootstrap.",
+        "[FortnoxMCP] No usable refresh token found. Starting Fortnox authorization with the configured client credentials.",
       );
       console.error("[FortnoxMCP] Opening browser for authorization.");
       console.error(

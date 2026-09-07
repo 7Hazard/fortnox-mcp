@@ -2,7 +2,11 @@ import axios, { AxiosError } from "axios";
 import { FORTNOX_OAUTH_URL, TOKEN_REFRESH_BUFFER_MS } from "../constants.js";
 import { ITokenProvider, TokenInfo, AuthRequiredError } from "./types.js";
 import { getFortnoxCredentials } from "./credentials.js";
-import { readPersistedTokens, persistTokens } from "./fileTokenStore.js";
+import {
+  clearPersistedTokens,
+  readPersistedTokens,
+  persistTokens,
+} from "./fileTokenStore.js";
 
 interface TokenResponse {
   access_token: string;
@@ -34,14 +38,14 @@ export class EnvVarTokenProvider implements ITokenProvider {
         accessToken: persisted.accessToken || "",
         refreshToken: persisted.refreshToken,
         expiresAt: persisted.expiresAt || 0,
-        scope: persisted.scope || process.env.FORTNOX_SCOPE || ""
+        scope: persisted.scope || process.env.FORTNOX_SCOPE || "",
       };
     } else if (envRefreshToken) {
       this.tokens = {
         accessToken: process.env.FORTNOX_ACCESS_TOKEN || "",
         refreshToken: envRefreshToken,
         expiresAt: process.env.FORTNOX_ACCESS_TOKEN ? Date.now() + 3600000 : 0,
-        scope: process.env.FORTNOX_SCOPE || ""
+        scope: process.env.FORTNOX_SCOPE || "",
       };
     }
   }
@@ -51,7 +55,8 @@ export class EnvVarTokenProvider implements ITokenProvider {
       throw new AuthRequiredError();
     }
 
-    const needsRefresh = Date.now() >= this.tokens.expiresAt - TOKEN_REFRESH_BUFFER_MS;
+    const needsRefresh =
+      Date.now() >= this.tokens.expiresAt - TOKEN_REFRESH_BUFFER_MS;
 
     if (needsRefresh || !this.tokens.accessToken) {
       if (!this.refreshPromise) {
@@ -73,9 +78,14 @@ export class EnvVarTokenProvider implements ITokenProvider {
     return this.tokens;
   }
 
-  async exchangeAuthorizationCode(code: string, redirectUri: string): Promise<void> {
+  async exchangeAuthorizationCode(
+    code: string,
+    redirectUri: string,
+  ): Promise<void> {
     const tokenUrl = `${FORTNOX_OAUTH_URL}/token`;
-    const auth = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64");
+    const auth = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString(
+      "base64",
+    );
 
     try {
       const response = await axios.post<TokenResponse>(
@@ -83,29 +93,36 @@ export class EnvVarTokenProvider implements ITokenProvider {
         new URLSearchParams({
           grant_type: "authorization_code",
           code: code,
-          redirect_uri: redirectUri
+          redirect_uri: redirectUri,
         }),
         {
           headers: {
-            "Authorization": `Basic ${auth}`,
-            "Content-Type": "application/x-www-form-urlencoded"
-          }
-        }
+            Authorization: `Basic ${auth}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        },
       );
 
       this.storeTokens(response.data);
     } catch (error) {
-      throw this.handleAuthError(error, "Failed to exchange authorization code");
+      throw this.handleAuthError(
+        error,
+        "Failed to exchange authorization code",
+      );
     }
   }
 
-  getAuthorizationUrl(redirectUri: string, scopes: string[], state?: string): string {
+  getAuthorizationUrl(
+    redirectUri: string,
+    scopes: string[],
+    state?: string,
+  ): string {
     const params = new URLSearchParams({
       client_id: this.clientId,
       redirect_uri: redirectUri,
       scope: scopes.join(" "),
       response_type: "code",
-      access_type: "offline"
+      access_type: "offline",
     });
 
     if (state) {
@@ -121,28 +138,34 @@ export class EnvVarTokenProvider implements ITokenProvider {
     }
 
     const tokenUrl = `${FORTNOX_OAUTH_URL}/token`;
-    const auth = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64");
+    const auth = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString(
+      "base64",
+    );
 
     try {
       const response = await axios.post<TokenResponse>(
         tokenUrl,
         new URLSearchParams({
           grant_type: "refresh_token",
-          refresh_token: this.tokens.refreshToken
+          refresh_token: this.tokens.refreshToken,
         }),
         {
           headers: {
-            "Authorization": `Basic ${auth}`,
-            "Content-Type": "application/x-www-form-urlencoded"
-          }
-        }
+            Authorization: `Basic ${auth}`,
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        },
       );
 
       this.storeTokens(response.data);
       return this.tokens!.accessToken;
     } catch (error) {
       this.tokens = null;
-      throw this.handleAuthError(error, "Failed to refresh access token");
+      clearPersistedTokens();
+      throw new AuthRequiredError(
+        undefined,
+        this.handleAuthError(error, "Failed to refresh access token").message,
+      );
     }
   }
 
@@ -152,10 +175,15 @@ export class EnvVarTokenProvider implements ITokenProvider {
       accessToken: response.access_token,
       refreshToken: response.refresh_token,
       expiresAt,
-      scope: response.scope
+      scope: response.scope,
     };
     // Persist to file so new refresh token survives process restarts
-    persistTokens(response.refresh_token, response.access_token, expiresAt, response.scope);
+    persistTokens(
+      response.refresh_token,
+      response.access_token,
+      expiresAt,
+      response.scope,
+    );
   }
 
   private handleAuthError(error: unknown, context: string): Error {
@@ -165,21 +193,24 @@ export class EnvVarTokenProvider implements ITokenProvider {
 
       if (status === 401) {
         return new Error(
-          `${context}: Invalid credentials. Check FORTNOX_CLIENT_ID and FORTNOX_CLIENT_SECRET.`
+          `${context}: Invalid credentials. Check FORTNOX_CLIENT_ID and FORTNOX_CLIENT_SECRET.`,
         );
       }
       if (status === 400) {
-        const errorDesc = data?.error_description || data?.error || "Bad request";
+        const errorDesc =
+          data?.error_description || data?.error || "Bad request";
         return new Error(
           `${context}: ${errorDesc}. The refresh token may be expired or revoked. ` +
-          `Please re-authorize the application.`
+            `Please re-authorize the application.`,
         );
       }
       return new Error(
-        `${context}: API error ${status} - ${JSON.stringify(data)}`
+        `${context}: API error ${status} - ${JSON.stringify(data)}`,
       );
     }
 
-    return new Error(`${context}: ${error instanceof Error ? error.message : String(error)}`);
+    return new Error(
+      `${context}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }

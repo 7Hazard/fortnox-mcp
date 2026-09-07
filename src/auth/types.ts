@@ -18,10 +18,15 @@ export interface RequestContext {
 }
 
 export class AuthRequiredError extends Error {
-  constructor(public userId?: string) {
-    super(userId
-      ? `Authentication required for user ${userId}`
-      : "Authentication required. Set FORTNOX_REFRESH_TOKEN environment variable."
+  constructor(
+    public userId?: string,
+    message?: string,
+  ) {
+    super(
+      message ||
+        (userId
+          ? `Authentication required for user ${userId}`
+          : "Fortnox authorization required. Starting authorization with the configured client credentials."),
     );
     this.name = "AuthRequiredError";
   }

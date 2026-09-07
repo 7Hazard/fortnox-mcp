@@ -25,12 +25,16 @@ export interface FortnoxCredentials {
  * Prefers embedded credentials, falls back to environment variables
  */
 export function getFortnoxCredentials(): FortnoxCredentials {
-  const clientId = EMBEDDED_CLIENT_ID || process.env.FORTNOX_CLIENT_ID;
-  const clientSecret = EMBEDDED_CLIENT_SECRET || process.env.FORTNOX_CLIENT_SECRET;
+  const clientId = (
+    EMBEDDED_CLIENT_ID || process.env.FORTNOX_CLIENT_ID
+  )?.trim();
+  const clientSecret = (
+    EMBEDDED_CLIENT_SECRET || process.env.FORTNOX_CLIENT_SECRET
+  )?.trim();
 
   if (!clientId || !clientSecret) {
     throw new Error(
-      "Missing Fortnox credentials. Set FORTNOX_CLIENT_ID and FORTNOX_CLIENT_SECRET environment variables."
+      "Missing Fortnox credentials. Set FORTNOX_CLIENT_ID and FORTNOX_CLIENT_SECRET environment variables.",
     );
   }
 
@@ -41,8 +45,12 @@ export function getFortnoxCredentials(): FortnoxCredentials {
  * Check if credentials are available
  */
 export function hasFortnoxCredentials(): boolean {
-  const clientId = EMBEDDED_CLIENT_ID || process.env.FORTNOX_CLIENT_ID;
-  const clientSecret = EMBEDDED_CLIENT_SECRET || process.env.FORTNOX_CLIENT_SECRET;
+  const clientId = (
+    EMBEDDED_CLIENT_ID || process.env.FORTNOX_CLIENT_ID
+  )?.trim();
+  const clientSecret = (
+    EMBEDDED_CLIENT_SECRET || process.env.FORTNOX_CLIENT_SECRET
+  )?.trim();
   return !!(clientId && clientSecret);
 }
 
@@ -54,5 +62,5 @@ export const FORTNOX_SCOPES = [
   "customer",
   "invoice",
   "supplier",
-  "bookkeeping"
+  "bookkeeping",
 ];
