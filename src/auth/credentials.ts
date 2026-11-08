@@ -95,6 +95,19 @@ export const FORTNOX_SCOPES = [
   "project",
   "settings",
   "supplierinvoice",
+  "archive",
+  "assets",
+  "connectfile",
+  "developerapi",
+  "inbox",
+  "noxfinansinvoice",
+  "price",
+  "print",
+  "profile",
+  "salary",
+  "timereporting",
+  "warehouse",
+  "warehousecustomdocument",
 ];
 
 export function hasRequiredFortnoxScopes(scope: string): boolean {

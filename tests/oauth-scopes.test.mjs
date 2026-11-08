@@ -51,14 +51,33 @@ test.after(() => {
 test("local authorization discards tokens missing a required scope", () => {
   assert.equal(homedir(), temporaryHome);
   for (const scope of [
+    "archive",
+    "article",
+    "assets",
+    "bookkeeping",
+    "companyinformation",
+    "connectfile",
     "costcenter",
     "currency",
+    "customer",
+    "developerapi",
+    "inbox",
+    "invoice",
+    "noxfinansinvoice",
     "offer",
     "order",
     "payment",
+    "price",
+    "print",
+    "profile",
     "project",
+    "salary",
     "settings",
+    "supplier",
     "supplierinvoice",
+    "timereporting",
+    "warehouse",
+    "warehousecustomdocument",
   ]) {
     assert.equal(FORTNOX_SCOPES.includes(scope), true, scope);
   }
@@ -76,7 +95,9 @@ test("local authorization discards tokens missing a required scope", () => {
   assert.equal(new EnvVarTokenProvider().isAuthenticated(), true);
   assert.equal(JSON.parse(readFileSync(tokenFile, "utf8")).scope, tokens.scope);
 
-  tokens.scope = FORTNOX_SCOPES.filter((scope) => scope !== "order").join(" ");
+  tokens.scope = FORTNOX_SCOPES.filter((scope) => scope !== "archive").join(
+    " ",
+  );
   assert.equal(hasRequiredFortnoxScopes(tokens.scope), false);
   writeFileSync(tokenFile, JSON.stringify(tokens));
   assert.equal(new EnvVarTokenProvider().isAuthenticated(), false);
@@ -116,7 +137,7 @@ test("remote authorization rejects stale access and refresh tokens", async () =>
     "Bearer",
   );
 
-  tokens.scope = FORTNOX_SCOPES.filter((scope) => scope !== "order").join(" ");
+  tokens.scope = FORTNOX_SCOPES.filter((scope) => scope !== "inbox").join(" ");
   await storage.set(userId, tokens);
   await assert.rejects(provider.verifyAccessToken(accessToken), {
     errorCode: "invalid_token",

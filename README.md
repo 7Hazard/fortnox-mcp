@@ -424,6 +424,7 @@ Fortnox refresh tokens are single-use — each token refresh returns a new one. 
 - After each token refresh, the new refresh token is saved to `~/.fortnox-mcp/tokens.json`
 - On subsequent restarts, the server uses the persisted token (which is always the latest)
 - If required scopes change, the server discards an outdated token and requests authorization again. Fortnox licenses and integration permissions still apply.
+- The server requests all scope identifiers listed in Fortnox's [resource scope table](https://www.fortnox.se/developer/guides-and-good-to-know/scopes), including archive, inbox, payroll and developer API access. All requested scopes are required; the integration and account must be able to grant them. Fortnox scopes allow both read and write access.
 - If the persisted file is missing or corrupt, the server falls back to the environment variable
 
 The token file is created with restricted permissions (`0600`) for security.
