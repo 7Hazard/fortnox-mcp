@@ -20,6 +20,13 @@ export interface FortnoxCredentials {
   clientSecret: string;
 }
 
+function isUnresolvedEnvironmentInput(value: string): boolean {
+  return (
+    /\$\{(?:input|env):[^}]+\}/i.test(value) ||
+    /^(?:FORTNOX_CLIENT_ID|FORTNOX_CLIENT_SECRET)$/i.test(value.trim())
+  );
+}
+
 /**
  * Get Fortnox OAuth credentials
  * Prefers embedded credentials, falls back to environment variables
@@ -31,6 +38,17 @@ export function getFortnoxCredentials(): FortnoxCredentials {
   const clientSecret = (
     EMBEDDED_CLIENT_SECRET || process.env.FORTNOX_CLIENT_SECRET
   )?.trim();
+
+  if (
+    (clientId && isUnresolvedEnvironmentInput(clientId)) ||
+    (clientSecret && isUnresolvedEnvironmentInput(clientSecret))
+  ) {
+    throw new Error(
+      "FORTNOX_CLIENT_ID or FORTNOX_CLIENT_SECRET contains an unresolved VS Code " +
+        "input/environment reference. Check that the MCP server's env values are " +
+        "substituted before launch.",
+    );
+  }
 
   if (!clientId || !clientSecret) {
     throw new Error(
@@ -51,45 +69,37 @@ export function hasFortnoxCredentials(): boolean {
   const clientSecret = (
     EMBEDDED_CLIENT_SECRET || process.env.FORTNOX_CLIENT_SECRET
   )?.trim();
-  return !!(clientId && clientSecret);
+  return !!(
+    clientId &&
+    clientSecret &&
+    !isUnresolvedEnvironmentInput(clientId) &&
+    !isUnresolvedEnvironmentInput(clientSecret)
+  );
 }
 
 /**
  * Fortnox OAuth scopes required by this MCP server
  */
 export const FORTNOX_SCOPES = [
-  "assets",
-  "archive",
-  "article",
-  "payment",
   "companyinformation",
   "customer",
-  "companylogo",
-  "inbox",
-  "settings",
-  "connectfile",
-  "costcenter",
+  "article",
   "invoice",
-  "noxfinansinvoice",
-  "warehouse",
-  "warehousecustomdocument",
   "supplier",
-  "supplierinvoice",
-  "salary",
+  "bookkeeping",
+  "costcenter",
+  "currency",
   "offer",
   "order",
-  "price",
-  "profile",
+  "payment",
   "project",
-  "bookkeeping",
-  "deletevoucher",
-  "timereporting",
-  "print",
-  "developerapi",
-  "currency",
+  "settings",
+  "supplierinvoice",
 ];
 
 export function hasRequiredFortnoxScopes(scope: string): boolean {
   const grantedScopes = new Set(scope.split(/\s+/).filter(Boolean));
-  return FORTNOX_SCOPES.every((requiredScope) => grantedScopes.has(requiredScope));
+  return FORTNOX_SCOPES.every((requiredScope) =>
+    grantedScopes.has(requiredScope),
+  );
 }

@@ -67,6 +67,7 @@ export class FortnoxAuth {
 
 // Singleton instance for backwards compatibility
 let authInstance: FortnoxAuth | null = null;
+let localAuthPromise: Promise<FortnoxAuth> | null = null;
 
 function openBrowser(url: string): void {
   try {
@@ -249,22 +250,30 @@ async function bootstrapLocalTokenIfNeeded(): Promise<void> {
   process.env.FORTNOX_SCOPE = scope;
 }
 
-export async function ensureLocalAuth(): Promise<FortnoxAuth> {
+export function ensureLocalAuth(): Promise<FortnoxAuth> {
   if (authInstance?.isAuthenticated()) {
-    return authInstance;
+    return Promise.resolve(authInstance);
   }
 
-  await bootstrapLocalTokenIfNeeded();
+  if (!localAuthPromise) {
+    localAuthPromise = (async () => {
+      await bootstrapLocalTokenIfNeeded();
 
-  const provider = new EnvVarTokenProvider();
-  initializeTokenProvider(provider);
-  authInstance = new FortnoxAuth(provider);
+      const provider = new EnvVarTokenProvider();
+      initializeTokenProvider(provider);
+      authInstance = new FortnoxAuth(provider);
 
-  if (!authInstance.isAuthenticated()) {
-    throw new Error(
-      "Unable to authenticate with Fortnox. Refresh token is still missing.",
-    );
+      if (!authInstance.isAuthenticated()) {
+        throw new Error(
+          "Unable to authenticate with Fortnox. Refresh token is still missing.",
+        );
+      }
+
+      return authInstance;
+    })().finally(() => {
+      localAuthPromise = null;
+    });
   }
 
-  return authInstance;
+  return localAuthPromise;
 }

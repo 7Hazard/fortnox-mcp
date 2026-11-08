@@ -16,6 +16,20 @@ import {
   FETCH_ALL_DELAY_MS,
 } from "../constants.js";
 
+export type FortnoxQueryValue =
+  | string
+  | number
+  | boolean
+  | readonly (string | number | boolean)[]
+  | undefined;
+
+export interface FortnoxRequestOptions {
+  contentType?: string;
+  accept?: string;
+  responseType?: "json" | "text" | "arraybuffer";
+  headers?: Record<string, string>;
+}
+
 // Rate limiting state
 let requestTimestamps: number[] = [];
 
@@ -52,9 +66,10 @@ async function waitForRateLimit(): Promise<void> {
  */
 export async function fortnoxRequest<T>(
   endpoint: string,
-  method: "GET" | "POST" | "PUT" | "DELETE" = "GET",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE" = "GET",
   data?: unknown,
-  params?: Record<string, string | number | boolean | undefined>,
+  params?: Record<string, FortnoxQueryValue>,
+  options: FortnoxRequestOptions = {},
 ): Promise<T> {
   await waitForRateLimit();
 
@@ -83,7 +98,10 @@ export async function fortnoxRequest<T>(
   }
 
   // Clean undefined params
-  const cleanParams: Record<string, string | number | boolean> = {};
+  const cleanParams: Record<
+    string,
+    string | number | boolean | readonly (string | number | boolean)[]
+  > = {};
   if (params) {
     for (const [key, value] of Object.entries(params)) {
       if (value !== undefined) {
@@ -92,17 +110,38 @@ export async function fortnoxRequest<T>(
     }
   }
 
+  const isFormData =
+    typeof FormData !== "undefined" && data instanceof FormData;
   const config: AxiosRequestConfig = {
     method,
     url: `${FORTNOX_API_BASE_URL}${endpoint}`,
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
+      ...(isFormData
+        ? {}
+        : { "Content-Type": options.contentType ?? "application/json" }),
+      Accept: options.accept ?? "application/json",
+      ...options.headers,
     },
     timeout: 30000,
     params: Object.keys(cleanParams).length > 0 ? cleanParams : undefined,
+    paramsSerializer: {
+      serialize: (values) => {
+        const serialized = new URLSearchParams();
+        for (const [key, value] of Object.entries(values)) {
+          if (Array.isArray(value)) {
+            for (const item of value) {
+              serialized.append(key, String(item));
+            }
+          } else if (value !== undefined && value !== null) {
+            serialized.append(key, String(value));
+          }
+        }
+        return serialized.toString();
+      },
+    },
     data,
+    responseType: options.responseType,
   };
 
   try {

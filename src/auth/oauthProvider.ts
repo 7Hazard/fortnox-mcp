@@ -12,9 +12,13 @@ import {
   OAuthTokenRevocationRequest,
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import {
+  InvalidGrantError,
+  InvalidTokenError,
+} from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { ITokenStorage } from "./storage/types.js";
 import { DatabaseTokenProvider } from "./databaseProvider.js";
-import { FORTNOX_SCOPES } from "./credentials.js";
+import { FORTNOX_SCOPES, hasRequiredFortnoxScopes } from "./credentials.js";
 
 // JWT configuration
 const JWT_ALGORITHM = "HS256";
@@ -68,7 +72,7 @@ export class FortnoxProxyOAuthProvider implements OAuthServerProvider {
   constructor(
     jwtSecret: string,
     serverUrl: string,
-    tokenStorage: ITokenStorage
+    tokenStorage: ITokenStorage,
   ) {
     this.jwtSecret = new TextEncoder().encode(jwtSecret);
     this.serverUrl = serverUrl;
@@ -87,7 +91,7 @@ export class FortnoxProxyOAuthProvider implements OAuthServerProvider {
   async authorize(
     client: OAuthClientInformationFull,
     params: AuthorizationParams,
-    res: Response
+    res: Response,
   ): Promise<void> {
     // Generate state to link MCP request to Fortnox OAuth
     const oauthState = crypto.randomUUID();
@@ -107,7 +111,7 @@ export class FortnoxProxyOAuthProvider implements OAuthServerProvider {
     const fortnoxAuthUrl = this.tokenProvider.getAuthorizationUrl(
       `${this.serverUrl}/oauth/fortnox/callback`,
       FORTNOX_SCOPES,
-      oauthState
+      oauthState,
     );
 
     res.redirect(fortnoxAuthUrl);
@@ -115,7 +119,7 @@ export class FortnoxProxyOAuthProvider implements OAuthServerProvider {
 
   async handleFortnoxCallback(
     code: string,
-    state: string
+    state: string,
   ): Promise<{ redirectUri: string; code: string; state?: string }> {
     // Look up pending authorization
     const pending = this.pendingAuthorizations.get(state);
@@ -133,7 +137,7 @@ export class FortnoxProxyOAuthProvider implements OAuthServerProvider {
     await this.tokenProvider.exchangeAuthorizationCode(
       code,
       `${this.serverUrl}/oauth/fortnox/callback`,
-      userId
+      userId,
     );
 
     // Issue our own authorization code
@@ -159,7 +163,7 @@ export class FortnoxProxyOAuthProvider implements OAuthServerProvider {
 
   async challengeForAuthorizationCode(
     _client: OAuthClientInformationFull,
-    authorizationCode: string
+    authorizationCode: string,
   ): Promise<string> {
     const issued = this.issuedCodes.get(authorizationCode);
     if (!issued) {
@@ -173,7 +177,7 @@ export class FortnoxProxyOAuthProvider implements OAuthServerProvider {
     authorizationCode: string,
     _codeVerifier?: string,
     _redirectUri?: string,
-    _resource?: URL
+    _resource?: URL,
   ): Promise<OAuthTokens> {
     const issued = this.issuedCodes.get(authorizationCode);
     if (!issued) {
@@ -201,7 +205,7 @@ export class FortnoxProxyOAuthProvider implements OAuthServerProvider {
     client: OAuthClientInformationFull,
     refreshToken: string,
     scopes?: string[],
-    _resource?: URL
+    _resource?: URL,
   ): Promise<OAuthTokens> {
     // Verify refresh token
     const payload = await this.verifyToken(refreshToken, "refresh");
@@ -215,11 +219,15 @@ export class FortnoxProxyOAuthProvider implements OAuthServerProvider {
       throw new Error("Token has been revoked");
     }
 
+    if (!(await this.hasValidFortnoxAuthorization(payload.userId))) {
+      throw new InvalidGrantError("Fortnox authorization must be renewed");
+    }
+
     // Issue new tokens
     return this.issueTokens(
       payload.userId,
       payload.clientId,
-      scopes || payload.scopes
+      scopes || payload.scopes,
     );
   }
 
@@ -230,6 +238,10 @@ export class FortnoxProxyOAuthProvider implements OAuthServerProvider {
     }
 
     const payload = await this.verifyToken(token, "access");
+
+    if (!(await this.hasValidFortnoxAuthorization(payload.userId))) {
+      throw new InvalidTokenError("Fortnox authorization must be renewed");
+    }
 
     return {
       token,
@@ -242,9 +254,17 @@ export class FortnoxProxyOAuthProvider implements OAuthServerProvider {
     };
   }
 
+  private async hasValidFortnoxAuthorization(userId: string): Promise<boolean> {
+    const tokens = await this.tokenProvider.getTokenInfoAsync(userId);
+    if (!tokens) return false;
+    if (hasRequiredFortnoxScopes(tokens.scope)) return true;
+    await this.tokenProvider.deleteTokens(userId);
+    return false;
+  }
+
   async revokeToken(
     _client: OAuthClientInformationFull,
-    request: OAuthTokenRevocationRequest
+    request: OAuthTokenRevocationRequest,
   ): Promise<void> {
     this.revokedTokens.add(request.token);
   }
@@ -252,7 +272,7 @@ export class FortnoxProxyOAuthProvider implements OAuthServerProvider {
   private async issueTokens(
     userId: string,
     clientId: string,
-    scopes: string[]
+    scopes: string[],
   ): Promise<OAuthTokens> {
     const now = Math.floor(Date.now() / 1000);
 
@@ -293,7 +313,7 @@ export class FortnoxProxyOAuthProvider implements OAuthServerProvider {
 
   private async verifyToken(
     token: string,
-    expectedType: "access" | "refresh"
+    expectedType: "access" | "refresh",
   ): Promise<{
     userId: string;
     clientId: string;
@@ -355,7 +375,10 @@ class InMemoryClientsStore implements OAuthRegisteredClientsStore {
   }
 
   registerClient(
-    client: Omit<OAuthClientInformationFull, "client_id" | "client_id_issued_at">
+    client: Omit<
+      OAuthClientInformationFull,
+      "client_id" | "client_id_issued_at"
+    >,
   ): OAuthClientInformationFull {
     const clientId = `client_${crypto.randomUUID()}`;
     const fullClient: OAuthClientInformationFull = {

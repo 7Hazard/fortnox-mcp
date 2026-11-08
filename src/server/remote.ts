@@ -28,6 +28,7 @@ import { registerCostCenterTools } from "../tools/costCenters.js";
 import { registerContractTools } from "../tools/contracts.js";
 import { registerCurrencyTools } from "../tools/currencies.js";
 import { registerTermsOfPaymentTools } from "../tools/termsOfPayment.js";
+import { registerFortnoxApiTools } from "../tools/api.js";
 import { ITokenStorage } from "../auth/storage/types.js";
 
 export interface RemoteServerOptions {
@@ -43,7 +44,7 @@ export function createRemoteServer(options: RemoteServerOptions): Express {
   const oauthProvider = new FortnoxProxyOAuthProvider(
     jwtSecret,
     serverUrl,
-    tokenStorage
+    tokenStorage,
   );
 
   initializeTokenProvider(oauthProvider.getTokenProvider());
@@ -69,7 +70,7 @@ export function createRemoteServer(options: RemoteServerOptions): Express {
       issuerUrl: new URL(serverUrl),
       scopesSupported: ["fortnox:read", "fortnox:write"],
       resourceName: "Fortnox MCP Server",
-    })
+    }),
   );
 
   // Fortnox OAuth callback handler
@@ -79,7 +80,10 @@ export function createRemoteServer(options: RemoteServerOptions): Express {
 
       if (error) {
         console.error(`[OAuth] Fortnox error: ${error} - ${error_description}`);
-        res.status(400).type("text").send(`OAuth error: ${error_description || error}`);
+        res
+          .status(400)
+          .type("text")
+          .send(`OAuth error: ${error_description || error}`);
         return;
       }
 
@@ -90,7 +94,7 @@ export function createRemoteServer(options: RemoteServerOptions): Express {
 
       const result = await oauthProvider.handleFortnoxCallback(
         code as string,
-        state as string
+        state as string,
       );
 
       // Redirect back to Claude with our authorization code
@@ -130,6 +134,7 @@ export function createRemoteServer(options: RemoteServerOptions): Express {
   registerContractTools(mcpServer);
   registerCurrencyTools(mcpServer);
   registerTermsOfPaymentTools(mcpServer);
+  registerFortnoxApiTools(mcpServer);
 
   // Protected MCP endpoint
   app.post(
@@ -162,7 +167,7 @@ export function createRemoteServer(options: RemoteServerOptions): Express {
         console.error("[MCP] Request error:", error);
         res.status(500).json({ error: "Internal server error" });
       }
-    }
+    },
   );
 
   // Error handler
@@ -174,7 +179,9 @@ export function createRemoteServer(options: RemoteServerOptions): Express {
   return app;
 }
 
-export async function runRemoteServer(options: RemoteServerOptions): Promise<void> {
+export async function runRemoteServer(
+  options: RemoteServerOptions,
+): Promise<void> {
   const app = createRemoteServer(options);
   const port = options.port || parseInt(process.env.PORT || "3000", 10);
 

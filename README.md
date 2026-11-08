@@ -72,7 +72,8 @@ Add this configuration:
       "args": ["-y", "fortnox-mcp-server"],
       "env": {
         "FORTNOX_CLIENT_ID": "your-client-id",
-        "FORTNOX_CLIENT_SECRET": "your-client-secret"
+        "FORTNOX_CLIENT_SECRET": "your-client-secret",
+        "FORTNOX_REFRESH_TOKEN": "your-refresh-token"
       }
     }
   }
@@ -81,7 +82,8 @@ Add this configuration:
 
 ### 3. Restart Claude Desktop
 
-That's it! You can now ask Claude to manage your Fortnox invoices, customers, and more.
+The MCP server starts browser authorization if no usable token is available.
+If a token is configured, it is used without opening a browser.
 
 ---
 
@@ -237,6 +239,26 @@ That's it! You can now ask Claude to manage your Fortnox invoices, customers, an
 - `fortnox_expense_analysis` - Analyze expenses by category
 - `fortnox_yearly_comparison` - Compare year-over-year performance
 - `fortnox_gross_margin_trend` - Track gross margin trends over time
+
+### Full API Coverage
+
+- `fortnox_list_api_operations` - Search the documented Fortnox API operations
+- `fortnox_get_api_operation_details` - Get parameters and request-body schema
+- `fortnox_call_api_operation` - Call a documented API operation by operation ID
+
+These tools expose the operations in `fortnox_docs/fortnox_api.json`, including
+resources that do not have dedicated MCP tools yet. Access remains subject to
+the connected Fortnox account's permissions and enabled modules. File uploads
+use a `file` object with `filename`, `content_base64`, and optional
+`content_type` (5 MB maximum). PDF and binary responses are returned as base64
+(10 MB maximum).
+
+Refresh the bundled official API reference and generated operation catalog with:
+
+```bash
+npm run sync:api-docs
+npm run generate:api-catalog
+```
 
 ## Installation
 
@@ -401,6 +423,7 @@ Fortnox refresh tokens are single-use — each token refresh returns a new one. 
 - On first run, the server uses `FORTNOX_REFRESH_TOKEN` if provided, otherwise opens a one-time browser OAuth bootstrap flow
 - After each token refresh, the new refresh token is saved to `~/.fortnox-mcp/tokens.json`
 - On subsequent restarts, the server uses the persisted token (which is always the latest)
+- If required scopes change, the server discards an outdated token and requests authorization again. Fortnox licenses and integration permissions still apply.
 - If the persisted file is missing or corrupt, the server falls back to the environment variable
 
 The token file is created with restricted permissions (`0600`) for security.

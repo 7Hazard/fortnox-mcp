@@ -31,9 +31,9 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import express from "express";
 
 import { loadConfig, validateEnvironment, logConfig } from "./config.js";
-import { ensureLocalAuth } from "./services/auth.js";
 import { getStorageFromEnv } from "./auth/storage/index.js";
 import { runRemoteServer } from "./server/remote.js";
+import { ensureLocalAuth } from "./services/auth.js";
 import { registerCustomerTools } from "./tools/customers.js";
 import { registerInvoiceTools } from "./tools/invoices.js";
 import { registerSupplierTools } from "./tools/suppliers.js";
@@ -52,6 +52,7 @@ import { registerCostCenterTools } from "./tools/costCenters.js";
 import { registerContractTools } from "./tools/contracts.js";
 import { registerCurrencyTools } from "./tools/currencies.js";
 import { registerTermsOfPaymentTools } from "./tools/termsOfPayment.js";
+import { registerFortnoxApiTools } from "./tools/api.js";
 
 function createMcpServer(): McpServer {
   const server = new McpServer({
@@ -77,35 +78,18 @@ function createMcpServer(): McpServer {
   registerContractTools(server);
   registerCurrencyTools(server);
   registerTermsOfPaymentTools(server);
+  registerFortnoxApiTools(server);
 
   return server;
 }
 
 async function runStdio(): Promise<void> {
-  try {
-    await ensureLocalAuth();
-  } catch (error) {
-    console.error(
-      `ERROR: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    process.exit(1);
-  }
-
   const server = createMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
 
 async function runLocalHTTP(): Promise<void> {
-  try {
-    await ensureLocalAuth();
-  } catch (error) {
-    console.error(
-      `ERROR: ${error instanceof Error ? error.message : String(error)}`,
-    );
-    process.exit(1);
-  }
-
   const server = createMcpServer();
   const app = express();
   app.use(express.json());
@@ -154,12 +138,16 @@ async function main(): Promise<void> {
         tokenStorage,
         port: config.port,
       });
-    } else if (config.transport === "http") {
-      // Local HTTP mode (no OAuth, uses env vars)
-      await runLocalHTTP();
     } else {
-      // Local stdio mode (default)
-      await runStdio();
+      if (config.transport === "http") {
+        await runLocalHTTP();
+      } else {
+        await runStdio();
+      }
+
+      void ensureLocalAuth().catch((error) => {
+        console.error("[FortnoxMCP] Authorization failed:", error);
+      });
     }
   } catch (error) {
     console.error("Server error:", error);
