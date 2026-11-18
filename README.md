@@ -83,7 +83,28 @@ Add this configuration:
 ### 3. Restart Claude Desktop
 
 The MCP server starts browser authorization if no usable token is available.
-If a token is configured, it is used without opening a browser.
+A configured refresh token is used without opening a browser when
+`FORTNOX_SCOPE` includes all required scopes.
+
+### Multiple Local Accounts
+
+One local server can connect multiple companies using the configured Fortnox
+app credentials:
+
+1. Use `fortnox_connect_company` with an account name such as `company-two`.
+   Authorize the intended company in the browser and verify the returned details.
+2. Use `fortnox_list_companies` to see account names and available company details.
+3. When more than one company is connected, specify its `account` name on each
+   Fortnox tool call. Calls without an account are rejected. With one company,
+   the account parameter is optional.
+
+The original local account is named `__default__` unless `FORTNOX_ACCOUNT` was
+configured. Existing token files are retained. For a company requiring renewed
+authorization, call `fortnox_connect_company` with its account name and
+`reconnect: true`. Reconnection checks the company identity when previously
+recorded; verify the returned details, especially for older tokens without saved
+company details. Do not run multiple server instances against the same token
+files: Fortnox refresh tokens are single-use.
 
 ---
 
@@ -320,6 +341,9 @@ npm run build
 | `FORTNOX_CLIENT_SECRET` | Yes      | Your Fortnox app client secret                                                                        |
 | `FORTNOX_REFRESH_TOKEN` | No       | Optional seed OAuth2 refresh token (if missing, server starts one-time local browser OAuth bootstrap) |
 | `FORTNOX_ACCESS_TOKEN`  | No       | Current access token (auto-refreshed)                                                                 |
+| `FORTNOX_SCOPE`         | No       | Granted scopes for a supplied refresh token                                                           |
+| `FORTNOX_ACCOUNT`       | No       | Name for the initial local account, for compatibility with existing named profiles |
+| `FORTNOX_OAUTH_CALLBACK_PORT` | No | Local OAuth callback port (default: 8888)                                                              |
 | `TRANSPORT`             | No       | `stdio` (default) or `http`                                                                           |
 | `PORT`                  | No       | HTTP port (default: 3000)                                                                             |
 
@@ -446,11 +470,12 @@ This server is published to multiple registries for easy installation:
 ### Token Persistence (Local Mode)
 
 Fortnox refresh tokens are single-use — each token refresh returns a new one. The server automatically persists the latest refresh token to `~/.fortnox-mcp/tokens.json` so it survives process restarts without requiring manual config updates.
+Named company tokens are stored separately in `~/.fortnox-mcp/tokens-<account>.json`. The existing default file is not migrated or shared with named profiles.
 
-- On first run, the server uses `FORTNOX_REFRESH_TOKEN` if provided, otherwise opens a one-time browser OAuth bootstrap flow
-- After each token refresh, the new refresh token is saved to `~/.fortnox-mcp/tokens.json`
+- On first run, the server uses `FORTNOX_REFRESH_TOKEN` with a sufficient `FORTNOX_SCOPE` if provided, otherwise opens a one-time browser OAuth bootstrap flow
+- After each token refresh, the new refresh token is saved to the instance's token file
 - On subsequent restarts, the server uses the persisted token (which is always the latest)
-- If required scopes change, the server discards an outdated token and requests authorization again. Fortnox licenses and integration permissions still apply.
+- If required scopes change or authorization expires, reconnect the affected company. Its entry is retained so calls cannot silently switch to another company. Fortnox licenses and integration permissions still apply.
 - The server requests all scope identifiers listed in Fortnox's [resource scope table](https://www.fortnox.se/developer/guides-and-good-to-know/scopes), including archive, inbox, payroll and developer API access. All requested scopes are required; the integration and account must be able to grant them. Fortnox scopes allow both read and write access.
 - If the persisted file is missing or corrupt, the server falls back to the environment variable
 

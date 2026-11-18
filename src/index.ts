@@ -53,6 +53,11 @@ import { registerContractTools } from "./tools/contracts.js";
 import { registerCurrencyTools } from "./tools/currencies.js";
 import { registerTermsOfPaymentTools } from "./tools/termsOfPayment.js";
 import { registerFortnoxApiTools } from "./tools/api.js";
+import {
+  enableLocalCompanyRouting,
+  registerLocalCompanyTools,
+} from "./tools/localCompanies.js";
+import { listPersistedAccounts } from "./auth/fileTokenStore.js";
 
 function createMcpServer(allowLocalFileUploads = false): McpServer {
   const server = new McpServer({
@@ -60,6 +65,8 @@ function createMcpServer(allowLocalFileUploads = false): McpServer {
     version: "1.0.0",
   });
 
+  registerLocalCompanyTools(server);
+  enableLocalCompanyRouting(server);
   registerCustomerTools(server);
   registerInvoiceTools(server);
   registerSupplierTools(server);
@@ -145,9 +152,11 @@ async function main(): Promise<void> {
         await runStdio();
       }
 
-      void ensureLocalAuth().catch((error) => {
-        console.error("[FortnoxMCP] Authorization failed:", error);
-      });
+      if (listPersistedAccounts().length === 0) {
+        void ensureLocalAuth().catch((error) => {
+          console.error("[FortnoxMCP] Authorization failed:", error);
+        });
+      }
     }
   } catch (error) {
     console.error("Server error:", error);

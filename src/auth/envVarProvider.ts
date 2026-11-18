@@ -6,7 +6,7 @@ import {
   hasRequiredFortnoxScopes,
 } from "./credentials.js";
 import {
-  clearPersistedTokens,
+  CompanyIdentity,
   readPersistedTokens,
   persistTokens,
 } from "./fileTokenStore.js";
@@ -26,26 +26,36 @@ export class EnvVarTokenProvider implements ITokenProvider {
   private tokens: TokenInfo | null = null;
   private refreshPromise: Promise<string> | null = null;
 
-  constructor() {
+  constructor(
+    private account?: string,
+    allowEnvSeed = true,
+  ) {
     const { clientId, clientSecret } = getFortnoxCredentials();
     this.clientId = clientId;
     this.clientSecret = clientSecret;
 
     // Initialize tokens: prefer persisted file (has latest refresh token),
     // fall back to environment variables for first-time setup
-    const persisted = readPersistedTokens();
-    const envRefreshToken = process.env.FORTNOX_REFRESH_TOKEN;
+    const persisted = readPersistedTokens(this.account);
+    const envRefreshToken = allowEnvSeed
+      ? process.env.FORTNOX_REFRESH_TOKEN
+      : undefined;
 
-    if (persisted?.refreshToken && hasRequiredFortnoxScopes(persisted.scope || "")) {
+    if (
+      persisted?.refreshToken &&
+      hasRequiredFortnoxScopes(persisted.scope || "")
+    ) {
       this.tokens = {
         accessToken: persisted.accessToken || "",
         refreshToken: persisted.refreshToken,
         expiresAt: persisted.expiresAt || 0,
         scope: persisted.scope || process.env.FORTNOX_SCOPE || "",
       };
-    } else if (persisted?.refreshToken) {
-      clearPersistedTokens();
-    } else if (envRefreshToken && hasRequiredFortnoxScopes(process.env.FORTNOX_SCOPE || "")) {
+    } else if (
+      !persisted?.refreshToken &&
+      envRefreshToken &&
+      hasRequiredFortnoxScopes(process.env.FORTNOX_SCOPE || "")
+    ) {
       this.tokens = {
         accessToken: process.env.FORTNOX_ACCESS_TOKEN || "",
         refreshToken: envRefreshToken,
@@ -86,6 +96,7 @@ export class EnvVarTokenProvider implements ITokenProvider {
   async exchangeAuthorizationCode(
     code: string,
     redirectUri: string,
+    verifyCompany?: (accessToken: string) => Promise<CompanyIdentity>,
   ): Promise<void> {
     const tokenUrl = `${FORTNOX_OAUTH_URL}/token`;
     const auth = Buffer.from(`${this.clientId}:${this.clientSecret}`).toString(
@@ -108,7 +119,14 @@ export class EnvVarTokenProvider implements ITokenProvider {
         },
       );
 
-      this.storeTokens(response.data);
+      if (!hasRequiredFortnoxScopes(response.data.scope || "")) {
+        throw new AuthRequiredError(
+          this.account,
+          "Fortnox authorization returned insufficient scopes.",
+        );
+      }
+      const company = await verifyCompany?.(response.data.access_token);
+      this.storeTokens(response.data, company);
     } catch (error) {
       throw this.handleAuthError(
         error,
@@ -164,7 +182,6 @@ export class EnvVarTokenProvider implements ITokenProvider {
 
       if (!hasRequiredFortnoxScopes(response.data.scope)) {
         this.tokens = null;
-        clearPersistedTokens();
         throw new AuthRequiredError(
           undefined,
           "Fortnox authorization returned insufficient scopes. Please re-authorize the application.",
@@ -175,7 +192,6 @@ export class EnvVarTokenProvider implements ITokenProvider {
       return this.tokens!.accessToken;
     } catch (error) {
       this.tokens = null;
-      clearPersistedTokens();
       throw new AuthRequiredError(
         undefined,
         this.handleAuthError(error, "Failed to refresh access token").message,
@@ -183,7 +199,10 @@ export class EnvVarTokenProvider implements ITokenProvider {
     }
   }
 
-  private storeTokens(response: TokenResponse): void {
+  private storeTokens(
+    response: TokenResponse,
+    company?: CompanyIdentity,
+  ): void {
     const expiresAt = Date.now() + response.expires_in * 1000;
     this.tokens = {
       accessToken: response.access_token,
@@ -197,6 +216,8 @@ export class EnvVarTokenProvider implements ITokenProvider {
       response.access_token,
       expiresAt,
       response.scope,
+      this.account,
+      company,
     );
   }
 

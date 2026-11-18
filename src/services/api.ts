@@ -4,8 +4,13 @@ import {
   EnvVarTokenProvider,
   getTokenProvider,
 } from "../auth/index.js";
-import { getCurrentUserId } from "../auth/context.js";
+import { getCurrentUserId, getRequestContext } from "../auth/context.js";
 import { ensureLocalAuth } from "./auth.js";
+import {
+  configuredLocalAccount,
+  getLocalAccountProvider,
+  listLocalAccounts,
+} from "./localAccounts.js";
 import {
   FORTNOX_API_BASE_URL,
   RATE_LIMIT_REQUESTS,
@@ -77,7 +82,10 @@ export async function fortnoxRequest<T>(
   // Get access token using the token provider
   // In local mode, userId is undefined and ignored
   // In remote mode, userId comes from the request context
-  let tokenProvider = getTokenProvider();
+  const account = getRequestContext()?.account;
+  let tokenProvider = account
+    ? getLocalAccountProvider(account)
+    : getTokenProvider();
   const userId = getCurrentUserId();
   let accessToken: string;
 
@@ -93,6 +101,15 @@ export async function fortnoxRequest<T>(
       throw error;
     }
 
+    if (
+      account &&
+      (account !== configuredLocalAccount() ||
+        listLocalAccounts().includes(account))
+    ) {
+      throw new Error(
+        `Company '${account}' needs authorization. Use fortnox_connect_company with reconnect=true.`,
+      );
+    }
     await ensureLocalAuth();
     tokenProvider = getTokenProvider();
     accessToken = await tokenProvider.getAccessToken(userId);

@@ -15,6 +15,7 @@ export interface ITokenProvider {
 export interface RequestContext {
   userId?: string;
   sessionId?: string;
+  account?: string;
 }
 
 export class AuthRequiredError extends Error {

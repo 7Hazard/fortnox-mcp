@@ -7,11 +7,27 @@
  * @deprecated Use getTokenProvider() from "../auth/index.js" instead
  */
 
-import { EnvVarTokenProvider, initializeTokenProvider } from "../auth/index.js";
+import {
+  EnvVarTokenProvider,
+  getTokenProvider,
+  initializeTokenProvider,
+} from "../auth/index.js";
 import type { ITokenProvider } from "../auth/types.js";
-import { getFortnoxCredentials, FORTNOX_SCOPES } from "../auth/credentials.js";
-import { persistTokens } from "../auth/fileTokenStore.js";
-import { FORTNOX_OAUTH_URL } from "../constants.js";
+import {
+  getFortnoxCredentials,
+  FORTNOX_SCOPES,
+  hasRequiredFortnoxScopes,
+} from "../auth/credentials.js";
+import {
+  CompanyIdentity,
+  DEFAULT_ACCOUNT,
+  getTokenFile,
+  listPersistedAccounts,
+  persistTokens,
+  readPersistedTokens,
+} from "../auth/fileTokenStore.js";
+import { FORTNOX_API_BASE_URL, FORTNOX_OAUTH_URL } from "../constants.js";
+import axios from "axios";
 import { createServer } from "http";
 import { randomUUID } from "crypto";
 import { spawn } from "child_process";
@@ -68,6 +84,95 @@ export class FortnoxAuth {
 // Singleton instance for backwards compatibility
 let authInstance: FortnoxAuth | null = null;
 let localAuthPromise: Promise<FortnoxAuth> | null = null;
+let authorizationQueue: Promise<void> = Promise.resolve();
+
+async function withLocalAuthorization<T>(action: () => Promise<T>): Promise<T> {
+  const previous = authorizationQueue;
+  let release!: () => void;
+  authorizationQueue = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await previous;
+  try {
+    return await action();
+  } finally {
+    release();
+  }
+}
+
+async function verifyCompanyIdentity(
+  accessToken: string,
+  account: string,
+): Promise<CompanyIdentity> {
+  const response = await axios.get(
+    `${FORTNOX_API_BASE_URL}/3/companyinformation`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      timeout: 30000,
+    },
+  );
+  const details = response.data?.CompanyInformation;
+  const company: CompanyIdentity = {
+    name: String(details?.CompanyName ?? "").trim(),
+    organizationNumber: String(details?.OrganizationNumber ?? "").trim(),
+    databaseNumber: String(details?.DatabaseNumber ?? "").trim(),
+  };
+  if (
+    !company.name ||
+    (!company.organizationNumber && !company.databaseNumber)
+  ) {
+    throw new Error("Could not verify the authorized company identity.");
+  }
+  const previousCompany = readPersistedTokens(account)?.company;
+  if (
+    previousCompany &&
+    ((previousCompany.organizationNumber &&
+      company.organizationNumber !== previousCompany.organizationNumber) ||
+      (previousCompany.databaseNumber &&
+        company.databaseNumber !== previousCompany.databaseNumber))
+  ) {
+    throw new Error(
+      `The authorized company does not match '${account}'. Existing credentials were not replaced.`,
+    );
+  }
+  return company;
+}
+
+export async function authorizeLocalAccount(
+  account: string,
+  reconnect = false,
+): Promise<{ provider: EnvVarTokenProvider; company: CompanyIdentity }> {
+  getTokenFile(account);
+  return withLocalAuthorization(async () => {
+    const configured =
+      account === (process.env.FORTNOX_ACCOUNT ?? DEFAULT_ACCOUNT);
+    if (
+      !reconnect &&
+      (listPersistedAccounts().includes(account) ||
+        (configured && getTokenProvider().isAuthenticated()))
+    ) {
+      throw new Error(
+        `Account '${account}' already exists. Set reconnect to true to reauthorize it.`,
+      );
+    }
+    const provider = new EnvVarTokenProvider(account, false);
+    const { clientId } = getFortnoxCredentials();
+    const authCode = await waitForAuthorizationCode(clientId);
+    let company: CompanyIdentity | undefined;
+    await provider.exchangeAuthorizationCode(
+      authCode.code,
+      authCode.redirectUri,
+      async (accessToken) => {
+        company = await verifyCompanyIdentity(accessToken, account);
+        return company;
+      },
+    );
+    if (configured) {
+      authInstance = new FortnoxAuth(provider);
+    }
+    return { provider, company: company! };
+  });
+}
 
 function openBrowser(url: string): void {
   try {
@@ -242,8 +347,20 @@ async function bootstrapLocalTokenIfNeeded(): Promise<void> {
   );
 
   const scope = tokens.scope || "";
+  if (!hasRequiredFortnoxScopes(scope)) {
+    throw new Error("Fortnox authorization returned insufficient scopes.");
+  }
+  const account = process.env.FORTNOX_ACCOUNT ?? DEFAULT_ACCOUNT;
+  const company = await verifyCompanyIdentity(tokens.access_token, account);
   const expiresAt = Date.now() + tokens.expires_in * 1000;
-  persistTokens(tokens.refresh_token, tokens.access_token, expiresAt, scope);
+  persistTokens(
+    tokens.refresh_token,
+    tokens.access_token,
+    expiresAt,
+    scope,
+    account,
+    company,
+  );
 
   process.env.FORTNOX_REFRESH_TOKEN = tokens.refresh_token;
   process.env.FORTNOX_ACCESS_TOKEN = tokens.access_token;
@@ -257,7 +374,7 @@ export function ensureLocalAuth(): Promise<FortnoxAuth> {
 
   if (!localAuthPromise) {
     localAuthPromise = (async () => {
-      await bootstrapLocalTokenIfNeeded();
+      await withLocalAuthorization(bootstrapLocalTokenIfNeeded);
 
       const provider = new EnvVarTokenProvider();
       initializeTokenProvider(provider);
