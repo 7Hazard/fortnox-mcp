@@ -650,6 +650,18 @@ export function registerFortnoxApiTools(
     idempotentHint: true,
     openWorldHint: true,
   };
+  const createAnnotations = {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: true,
+  };
+  const deleteAnnotations = {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: true,
+  };
 
   server.registerTool(
     "fortnox_list_voucher_file_connections",
@@ -688,6 +700,75 @@ export function registerFortnoxApiTools(
   );
 
   server.registerTool(
+    "fortnox_get_voucher_file_connection",
+    {
+      title: "Get Fortnox Voucher File Connection",
+      description: "Retrieve a voucher file connection by file ID.",
+      inputSchema: z.object({ file_id: z.string().min(1) }),
+      annotations: readOnlyAnnotations,
+    },
+    async ({ file_id }) =>
+      callOperation({
+        operation_id: "VoucherFileConnectionController_doShow",
+        path_parameters: { FileId: file_id },
+      }),
+  );
+
+  server.registerTool(
+    "fortnox_create_voucher_file_connection",
+    {
+      title: "Create Fortnox Voucher File Connection",
+      description: "Connect an archive file to a voucher.",
+      inputSchema: z.object({
+        file_id: z.string().min(1),
+        voucher_number: z.string().min(1),
+        voucher_series: z.string().min(1),
+        voucher_year: z.number().int().optional(),
+        voucher_description: z.string().optional(),
+      }),
+      annotations: createAnnotations,
+    },
+    async ({
+      file_id,
+      voucher_number,
+      voucher_series,
+      voucher_year,
+      voucher_description,
+    }) =>
+      callOperation({
+        operation_id: "VoucherFileConnectionController_doCreate",
+        body: {
+          VoucherFileConnection: {
+            FileId: file_id,
+            VoucherNumber: voucher_number,
+            VoucherSeries: voucher_series,
+            ...(voucher_year === undefined
+              ? {}
+              : { VoucherYear: voucher_year }),
+            ...(voucher_description === undefined
+              ? {}
+              : { VoucherDescription: voucher_description }),
+          },
+        },
+      }),
+  );
+
+  server.registerTool(
+    "fortnox_delete_voucher_file_connection",
+    {
+      title: "Delete Fortnox Voucher File Connection",
+      description: "Remove a voucher file connection by file ID.",
+      inputSchema: z.object({ file_id: z.string().min(1) }),
+      annotations: deleteAnnotations,
+    },
+    async ({ file_id }) =>
+      callOperation({
+        operation_id: "VoucherFileConnectionController_doDelete",
+        path_parameters: { FileId: file_id },
+      }),
+  );
+
+  server.registerTool(
     "fortnox_list_archive",
     {
       title: "List Fortnox Archive",
@@ -698,6 +779,66 @@ export function registerFortnoxApiTools(
     async ({ path }) =>
       callOperation({
         operation_id: "ArchiveController_doIndex",
+        query_parameters: path === undefined ? {} : { path },
+      }),
+  );
+
+  server.registerTool(
+    "fortnox_upload_archive_file",
+    {
+      title: "Upload Fortnox Archive File",
+      description:
+        "Upload a file to the archive root or a folder. Local file paths are available only over stdio.",
+      inputSchema: z.object({
+        file: z.union([
+          z
+            .object({
+              filename: z.string().min(1),
+              content_base64: z.string(),
+              content_type: z.string().optional(),
+            })
+            .strict(),
+          z
+            .object({
+              file_path: z.string().min(1),
+              filename: z.string().min(1).optional(),
+              content_type: z.string().optional(),
+            })
+            .strict(),
+        ]),
+        folder_id: z.string().optional(),
+        path: z.string().optional(),
+      }),
+      annotations: createAnnotations,
+    },
+    async ({ file, folder_id, path }) => {
+      const query_parameters: Record<string, string> = {};
+      if (folder_id !== undefined) query_parameters.folderid = folder_id;
+      if (path !== undefined) query_parameters.path = path;
+      return callOperation({
+        operation_id: "ArchiveController_doCreate",
+        query_parameters,
+        body: { file },
+      });
+    },
+  );
+
+  server.registerTool(
+    "fortnox_delete_archive_item",
+    {
+      title: "Delete Fortnox Archive Item",
+      description:
+        "Delete an archive file or folder by ID. Deleting a folder can remove its contents.",
+      inputSchema: z.object({
+        id: z.string().min(1),
+        path: z.string().optional(),
+      }),
+      annotations: deleteAnnotations,
+    },
+    async ({ id, path }) =>
+      callOperation({
+        operation_id: "ArchiveController_doDelete",
+        path_parameters: { id },
         query_parameters: path === undefined ? {} : { path },
       }),
   );

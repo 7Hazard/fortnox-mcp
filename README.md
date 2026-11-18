@@ -236,11 +236,16 @@ files: Fortnox refresh tokens are single-use.
 - `fortnox_account_activity` - Get activity for a specific account
 - `fortnox_search_vouchers` - Search vouchers by description, account, or amount
 - `fortnox_list_voucher_file_connections` - List linked voucher files
+- `fortnox_get_voucher_file_connection` - Get a voucher file connection
+- `fortnox_create_voucher_file_connection` - Connect a file to a voucher
+- `fortnox_delete_voucher_file_connection` - Remove a voucher file connection
 
 ### Archive
 
 - `fortnox_list_archive` - List archive folders and files
 - `fortnox_get_archive_file` - Retrieve an archive file by ID
+- `fortnox_upload_archive_file` - Upload a file to the archive
+- `fortnox_delete_archive_item` - Delete an archive file or folder
 
 ### Company Information
 

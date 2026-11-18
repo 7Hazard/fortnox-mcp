@@ -50,7 +50,7 @@ test.after(() => {
   rmSync(temporaryHome, { recursive: true, force: true });
 });
 
-test("local authorization discards tokens missing a required scope", () => {
+test("local authorization rejects tokens missing a required scope without deleting them", () => {
   assert.equal(homedir(), temporaryHome);
   for (const scope of [
     "archive",
@@ -103,7 +103,8 @@ test("local authorization discards tokens missing a required scope", () => {
   assert.equal(hasRequiredFortnoxScopes(tokens.scope), false);
   writeFileSync(tokenFile, JSON.stringify(tokens));
   assert.equal(new EnvVarTokenProvider().isAuthenticated(), false);
-  assert.equal(existsSync(tokenFile), false);
+  assert.equal(existsSync(tokenFile), true);
+  assert.deepEqual(JSON.parse(readFileSync(tokenFile, "utf8")), tokens);
 });
 
 test("remote authorization rejects stale access and refresh tokens", async () => {
@@ -247,13 +248,17 @@ test(
   "local startup attempts authorization without blocking MCP initialization",
   { timeout: 5000 },
   async () => {
+    const startupHome = mkdtempSync(join(tmpdir(), "fortnox-startup-"));
     const environment = {
       ...process.env,
       AUTH_MODE: "local",
       TRANSPORT: "stdio",
+      HOME: startupHome,
+      USERPROFILE: startupHome,
     };
     delete environment.FORTNOX_CLIENT_ID;
     delete environment.FORTNOX_CLIENT_SECRET;
+    delete environment.FORTNOX_ACCOUNT;
     const server = spawn(process.execPath, ["dist/index.js"], {
       env: environment,
     });
@@ -282,10 +287,15 @@ test(
       );
       assert.equal(JSON.parse((await response)[0]).id, 1);
     } finally {
+      const closed =
+        server.exitCode === null && server.signalCode === null
+          ? once(server, "close")
+          : Promise.resolve();
       server.kill();
       output.close();
       errors.close();
-      await once(server, "close");
+      await closed;
+      rmSync(startupHome, { recursive: true, force: true });
     }
   },
 );

@@ -9,6 +9,7 @@ import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { initializeTokenProvider } from "../dist/auth/index.js";
 import { registerFortnoxApiTools } from "../dist/tools/api.js";
+import { enableLocalCompanyRouting } from "../dist/tools/localCompanies.js";
 
 const tools = new Map();
 registerFortnoxApiTools({
@@ -327,6 +328,183 @@ test("dedicated tools expose permissions and forward documented inputs", async (
     await client.close();
     await server.close();
     axios.defaults.adapter = originalAdapter;
+  }
+});
+
+test("dedicated archive and voucher connection actions use documented requests", async () => {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "fortnox-actions-"));
+  const originalAdapter = axios.defaults.adapter;
+  const server = new McpServer({ name: "test", version: "1.0.0" });
+  const client = new Client({ name: "test-client", version: "1.0.0" });
+  registerFortnoxApiTools(server, { allowLocalFileUploads: true });
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  const requests = [];
+  const fileBytes = Buffer.from([0x25, 0x50, 0x44, 0x46, 0xff]);
+  const filePath = join(temporaryDirectory, "receipt.pdf");
+  axios.defaults.adapter = async (config) => {
+    requests.push(config);
+    return {
+      data: { ok: true },
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      config,
+    };
+  };
+  try {
+    await writeFile(filePath, fileBytes);
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    const listed = await client.listTools();
+    for (const [name, readOnly, destructive] of [
+      ["fortnox_get_voucher_file_connection", true, false],
+      ["fortnox_create_voucher_file_connection", false, false],
+      ["fortnox_delete_voucher_file_connection", false, true],
+      ["fortnox_upload_archive_file", false, false],
+      ["fortnox_delete_archive_item", false, true],
+    ]) {
+      const tool = listed.tools.find((item) => item.name === name);
+      assert.equal(tool.annotations.readOnlyHint, readOnly);
+      assert.equal(tool.annotations.destructiveHint, destructive);
+    }
+
+    const call = (name, args) => client.callTool({ name, arguments: args });
+    let result = await call("fortnox_create_voucher_file_connection", {
+      file_id: "file/id",
+      voucher_number: "123",
+      voucher_series: "A",
+      voucher_year: 4,
+      voucher_description: "Receipt",
+    });
+    assert.equal(result.isError, undefined);
+    assert.equal(requests.at(-1).method, "post");
+    assert.ok(requests.at(-1).url.endsWith("/3/voucherfileconnections"));
+    assert.deepEqual(JSON.parse(requests.at(-1).data), {
+      VoucherFileConnection: {
+        FileId: "file/id",
+        VoucherNumber: "123",
+        VoucherSeries: "A",
+        VoucherYear: 4,
+        VoucherDescription: "Receipt",
+      },
+    });
+
+    for (const [name, method] of [
+      ["fortnox_get_voucher_file_connection", "get"],
+      ["fortnox_delete_voucher_file_connection", "delete"],
+    ]) {
+      result = await call(name, { file_id: "file/id" });
+      assert.equal(result.isError, undefined);
+      assert.equal(requests.at(-1).method, method);
+      assert.ok(
+        requests.at(-1).url.endsWith("/3/voucherfileconnections/file%2Fid"),
+      );
+    }
+
+    result = await call("fortnox_upload_archive_file", {
+      file: {
+        filename: "receipt.pdf",
+        content_base64: fileBytes.toString("base64"),
+        content_type: "application/pdf",
+      },
+      folder_id: "folder",
+      path: "receipts",
+    });
+    assert.equal(result.isError, undefined);
+    assert.equal(requests.at(-1).method, "post");
+    assert.ok(requests.at(-1).url.endsWith("/3/archive"));
+    assert.deepEqual(requests.at(-1).params, {
+      folderid: "folder",
+      path: "receipts",
+    });
+    const uploaded = requests.at(-1).data.get("file");
+    assert.equal(uploaded.name, "receipt.pdf");
+    assert.equal(uploaded.type, "application/pdf");
+    assert.deepEqual(Buffer.from(await uploaded.arrayBuffer()), fileBytes);
+
+    result = await call("fortnox_upload_archive_file", {
+      file: { file_path: filePath },
+    });
+    assert.equal(result.isError, undefined);
+    assert.deepEqual(
+      Buffer.from(await requests.at(-1).data.get("file").arrayBuffer()),
+      fileBytes,
+    );
+    const remoteUpload = await tools
+      .get("fortnox_upload_archive_file")
+      .handler({ file: { file_path: filePath } });
+    assert.equal(remoteUpload.isError, true);
+    assert.match(remoteUpload.content[0].text, /only available over stdio/);
+
+    result = await call("fortnox_delete_archive_item", {
+      id: "file/id",
+      path: "receipts",
+    });
+    assert.equal(result.isError, undefined);
+    assert.equal(requests.at(-1).method, "delete");
+    assert.ok(requests.at(-1).url.endsWith("/3/archive/file%2Fid"));
+    assert.deepEqual(requests.at(-1).params, { path: "receipts" });
+
+    const count = requests.length;
+    assert.equal(
+      (
+        await call("fortnox_create_voucher_file_connection", {
+          file_id: "id",
+          voucher_series: "A",
+        })
+      ).isError,
+      true,
+    );
+    assert.equal(
+      (
+        await call("fortnox_upload_archive_file", {
+          file: {
+            file_path: filePath,
+            filename: "file.pdf",
+            content_base64: "AA==",
+          },
+        })
+      ).isError,
+      true,
+    );
+    assert.equal(
+      (await call("fortnox_delete_archive_item", { id: "" })).isError,
+      true,
+    );
+    assert.equal(requests.length, count);
+  } finally {
+    await client.close();
+    await server.close();
+    axios.defaults.adapter = originalAdapter;
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
+test("dedicated actions support local company routing", async () => {
+  const server = new McpServer({ name: "test", version: "1.0.0" });
+  const client = new Client({ name: "test-client", version: "1.0.0" });
+  enableLocalCompanyRouting(server);
+  registerFortnoxApiTools(server, { allowLocalFileUploads: true });
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  try {
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    const listed = await client.listTools();
+    for (const name of [
+      "fortnox_get_voucher_file_connection",
+      "fortnox_create_voucher_file_connection",
+      "fortnox_delete_voucher_file_connection",
+      "fortnox_upload_archive_file",
+      "fortnox_delete_archive_item",
+    ]) {
+      const tool = listed.tools.find((item) => item.name === name);
+      assert.equal(tool.inputSchema.properties.account.type, "string");
+    }
+  } finally {
+    await client.close();
+    await server.close();
   }
 });
 
