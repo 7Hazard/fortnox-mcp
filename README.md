@@ -256,7 +256,26 @@ These tools expose the operations in `fortnox_docs/fortnox_api.json`, including
 resources that do not have dedicated MCP tools yet. Access remains subject to
 the connected Fortnox account's permissions and enabled modules. File uploads
 use a `file` object with `filename`, `content_base64`, and optional
-`content_type` (5 MB maximum). API responses are returned in full in both text
+`content_type`. Local stdio can instead use an absolute
+`file_path`; `filename` is then
+optional and defaults to the file's basename. For example:
+
+```json
+{
+  "operation_id": "ArchiveController_doCreate",
+  "body": { "file": { "file_path": "C:\\Receipts\\invoice.pdf", "content_type": "application/pdf" } }
+}
+```
+
+Local stdio can upload any file the server process can read, so only use it
+with trusted MCP clients and approve uploads carefully. Path uploads are
+disabled for HTTP and remote servers; use base64 there. The server must have
+filesystem access to the files; containers need an explicit volume mount.
+
+Uploads are subject to Fortnox, client, hosting and available-memory limits;
+the MCP server does not impose a file-size limit.
+
+API responses are returned in full in both text
 and structured content; binary responses use base64 in `data.data`. Clients
 and hosting platforms may impose their own response limits. These tools do not
 extract PDF text.

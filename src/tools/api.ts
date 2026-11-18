@@ -1,5 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
+import { open, stat } from "node:fs/promises";
+import { basename, isAbsolute } from "node:path";
 import { buildErrorResponse } from "../services/formatters.js";
 import { fortnoxRequest } from "../services/api.js";
 import { FORTNOX_API_OPERATIONS } from "../generated/fortnoxApiOperations.js";
@@ -84,7 +86,7 @@ const CallOperationSchema = z.object({
     .unknown()
     .optional()
     .describe(
-      "JSON request body. For multipart uploads, provide a file object with filename, content_base64, and optional content_type.",
+      "JSON request body. For multipart uploads, provide file.content_base64 and filename, or file.file_path with local stdio; content_type is optional.",
     ),
 });
 
@@ -242,10 +244,36 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function createMultipartBody(
+async function readLocalFile(
+  filePath: string,
+  allowLocalFileUploads: boolean,
+): Promise<Buffer> {
+  if (!allowLocalFileUploads) {
+    throw new Error("Local file uploads are only available over stdio.");
+  }
+  if (!isAbsolute(filePath)) {
+    throw new Error("The file path must be absolute.");
+  }
+  if (!(await stat(filePath)).isFile()) {
+    throw new Error("Upload path must refer to a regular file.");
+  }
+  const file = await open(filePath, "r");
+  try {
+    const stat = await file.stat();
+    if (!stat.isFile()) {
+      throw new Error("Upload path must refer to a regular file.");
+    }
+    return await file.readFile();
+  } finally {
+    await file.close();
+  }
+}
+
+async function createMultipartBody(
   body: unknown,
   encoding: ApiOperation["requestEncoding"],
-): FormData {
+  allowLocalFileUploads: boolean,
+): Promise<FormData> {
   if (!isRecord(body)) {
     throw new Error("Multipart request bodies must be an object.");
   }
@@ -253,27 +281,51 @@ function createMultipartBody(
   const form = new FormData();
   for (const [name, value] of Object.entries(body)) {
     if (name === "file") {
-      if (
-        !isRecord(value) ||
-        typeof value.filename !== "string" ||
-        typeof value.content_base64 !== "string"
-      ) {
+      if (!isRecord(value)) {
         throw new Error(
-          "Multipart 'file' must contain filename and content_base64.",
+          "Multipart 'file' must contain content_base64 or file_path.",
         );
       }
-
+      const hasPath = value.file_path !== undefined;
+      const hasBase64 = value.content_base64 !== undefined;
       if (
-        value.content_base64.length % 4 !== 0 ||
-        !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-          value.content_base64,
-        )
+        hasPath === hasBase64 ||
+        (hasPath && typeof value.file_path !== "string") ||
+        (hasBase64 &&
+          (typeof value.content_base64 !== "string" ||
+            typeof value.filename !== "string")) ||
+        (value.filename !== undefined && typeof value.filename !== "string")
       ) {
-        throw new Error("Multipart file content_base64 must be valid base64.");
+        throw new Error(
+          "Multipart 'file' must contain either file_path or filename and content_base64.",
+        );
       }
-      const fileBytes = Buffer.from(value.content_base64, "base64");
-      if (fileBytes.length > 5 * 1024 * 1024) {
-        throw new Error("Uploaded files must not exceed 5 MB.");
+      let fileBytes: Buffer;
+      let filename: string;
+      if (typeof value.file_path === "string") {
+        fileBytes = await readLocalFile(value.file_path, allowLocalFileUploads);
+        filename =
+          typeof value.filename === "string"
+            ? value.filename
+            : basename(value.file_path);
+      } else if (
+        typeof value.content_base64 === "string" &&
+        typeof value.filename === "string"
+      ) {
+        if (
+          value.content_base64.length % 4 !== 0 ||
+          !/^[A-Za-z0-9+/]*={0,2}$/.test(value.content_base64)
+        ) {
+          throw new Error(
+            "Multipart file content_base64 must be valid base64.",
+          );
+        }
+        fileBytes = Buffer.from(value.content_base64, "base64");
+        filename = value.filename;
+      } else {
+        throw new Error(
+          "Multipart 'file' must contain either file_path or filename and content_base64.",
+        );
       }
       const contentType =
         typeof value.content_type === "string"
@@ -290,7 +342,7 @@ function createMultipartBody(
       const blob = new Blob([Uint8Array.from(fileBytes)], {
         type: contentType,
       });
-      form.append(name, blob, value.filename);
+      form.append(name, blob, filename);
     } else if (
       typeof value === "string" ||
       typeof value === "number" ||
@@ -374,10 +426,11 @@ function toBuffer(value: unknown): Buffer {
   throw new Error("Fortnox returned an unsupported binary response.");
 }
 
-function buildRequestBody(
+async function buildRequestBody(
   operation: ApiOperation,
   body: unknown,
-): { data: unknown; contentType?: string } {
+  allowLocalFileUploads: boolean,
+): Promise<{ data: unknown; contentType?: string }> {
   if (operation.requestBodyRequired && body === undefined) {
     throw new Error(`Request body is required for ${operation.operationId}.`);
   }
@@ -398,7 +451,11 @@ function buildRequestBody(
 
   if (requestContentTypes.includes("multipart/form-data")) {
     return {
-      data: createMultipartBody(body, operation.requestEncoding),
+      data: await createMultipartBody(
+        body,
+        operation.requestEncoding,
+        allowLocalFileUploads,
+      ),
       contentType: "multipart/form-data",
     };
   }
@@ -414,7 +471,10 @@ function buildRequestBody(
   return { data: body, contentType };
 }
 
-export function registerFortnoxApiTools(server: McpServer): void {
+export function registerFortnoxApiTools(
+  server: McpServer,
+  options: { allowLocalFileUploads?: boolean } = {},
+): void {
   server.registerTool(
     "fortnox_list_api_operations",
     {
@@ -530,7 +590,11 @@ export function registerFortnoxApiTools(server: McpServer): void {
         header_parameters,
         query_parameters,
       );
-      const requestBody = buildRequestBody(operation, body);
+      const requestBody = await buildRequestBody(
+        operation,
+        body,
+        options.allowLocalFileUploads ?? false,
+      );
       const responseType = getResponseType(operation);
       let responseContentType: string | undefined;
       const response = await fortnoxRequest<unknown>(
@@ -671,7 +735,7 @@ export function registerFortnoxApiTools(server: McpServer): void {
 
 First use fortnox_list_api_operations to find an operation_id, then fortnox_get_api_operation_details for its body schema and required parameters. This tool only accepts operation IDs from the bundled Fortnox OpenAPI catalog; arbitrary URLs and undocumented HTTP headers are not accepted.
 
-Supply path_parameters and query_parameters using the exact names shown in the catalog. Supply the documented JSON body when required. For multipart file uploads, body.file must contain filename and content_base64 (optional content_type). PDF responses are returned as base64. API permissions, enabled modules, and partner restrictions still apply.`,
+Supply path_parameters and query_parameters using the exact names shown in the catalog. Supply the documented JSON body when required. For multipart uploads, body.file must contain filename and content_base64, or an absolute file_path with local stdio. Optional fields: filename for file_path, content_type. PDF responses are returned as base64. API permissions, enabled modules, and partner restrictions still apply.`,
       inputSchema: CallOperationSchema,
       annotations: {
         readOnlyHint: false,

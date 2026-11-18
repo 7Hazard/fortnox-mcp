@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import axios from "axios";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -24,6 +27,172 @@ initializeTokenProvider({
   getTokenInfo() {
     return null;
   },
+});
+
+test("multipart file paths work locally without directory configuration", async (context) => {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "fortnox-upload-"));
+  const uploadDirectory = join(temporaryDirectory, "uploads");
+  const outsideDirectory = join(temporaryDirectory, "uploads-other");
+  const originalAdapter = axios.defaults.adapter;
+  const localTools = new Map();
+  registerFortnoxApiTools(
+    {
+      registerTool(name, config, handler) {
+        localTools.set(name, { config, handler });
+      },
+    },
+    { allowLocalFileUploads: true },
+  );
+  const call = (file, registeredTools = localTools) =>
+    registeredTools.get("fortnox_call_api_operation").handler({
+      operation_id: "ArchiveController_doCreate",
+      body: { file },
+    });
+  const requests = [];
+  axios.defaults.adapter = async (config) => {
+    requests.push(config);
+    return {
+      data: { ok: true },
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      config,
+    };
+  };
+  try {
+    await mkdir(uploadDirectory);
+    await mkdir(outsideDirectory);
+    const filePath = join(uploadDirectory, "receipt.pdf");
+    const outsidePath = join(outsideDirectory, "secret.pdf");
+    const fileBytes = Buffer.from([0x25, 0x50, 0x44, 0x46, 0xff, 0x80]);
+    await writeFile(filePath, fileBytes);
+    await writeFile(outsidePath, fileBytes);
+
+    const uploaded = await call({
+      file_path: filePath,
+      content_type: "application/pdf",
+    });
+    assert.equal(uploaded.isError, undefined);
+    const uploadedFile = requests.at(-1).data.get("file");
+    assert.equal(uploadedFile.name, "receipt.pdf");
+    assert.equal(uploadedFile.type, "application/pdf");
+    assert.deepEqual(Buffer.from(await uploadedFile.arrayBuffer()), fileBytes);
+
+    await call({ file_path: filePath, filename: "renamed.pdf" });
+    assert.equal(requests.at(-1).data.get("file").name, "renamed.pdf");
+    await call(
+      { filename: "base64.pdf", content_base64: fileBytes.toString("base64") },
+      tools,
+    );
+    assert.deepEqual(
+      Buffer.from(await requests.at(-1).data.get("file").arrayBuffer()),
+      fileBytes,
+    );
+
+    const outsideUpload = await call({ file_path: outsidePath });
+    assert.equal(outsideUpload.isError, undefined);
+    assert.deepEqual(
+      Buffer.from(await requests.at(-1).data.get("file").arrayBuffer()),
+      fileBytes,
+    );
+
+    const beforeRejected = requests.length;
+    for (const [file, registeredTools, message] of [
+      [{ file_path: filePath }, tools, /only available over stdio/],
+      [{ file_path: "relative.pdf" }, localTools, /absolute/],
+      [
+        { file_path: join(uploadDirectory, "missing.pdf") },
+        localTools,
+        /ENOENT/,
+      ],
+      [
+        { file_path: filePath, content_base64: "", filename: "both.pdf" },
+        localTools,
+        /either/,
+      ],
+      [
+        { filename: "bad.pdf", content_base64: "invalid" },
+        localTools,
+        /valid base64/,
+      ],
+      [
+        { filename: "bad.pdf", content_base64: "AA=A" },
+        localTools,
+        /valid base64/,
+      ],
+      [
+        { filename: "bad.pdf", content_base64: "====" },
+        localTools,
+        /valid base64/,
+      ],
+    ]) {
+      const result = await call(file, registeredTools);
+      assert.equal(result.isError, true);
+      assert.match(result.content[0].text, message);
+    }
+    const subdirectory = join(uploadDirectory, "nested");
+    await mkdir(subdirectory);
+    assert.match(
+      (await call({ file_path: subdirectory })).content[0].text,
+      /regular file/,
+    );
+    assert.equal(requests.length, beforeRejected);
+    const largeFile = join(uploadDirectory, "large.pdf");
+    const largeFileBytes = Buffer.alloc(5 * 1024 * 1024 + 1, 0xab);
+    await writeFile(largeFile, largeFileBytes);
+    assert.equal((await call({ file_path: largeFile })).isError, undefined);
+    assert.deepEqual(
+      Buffer.from(await requests.at(-1).data.get("file").arrayBuffer()),
+      largeFileBytes,
+    );
+    const largeBase64Upload = await call(
+      {
+        filename: "large.pdf",
+        content_base64: largeFileBytes.toString("base64"),
+      },
+      tools,
+    );
+    assert.equal(
+      largeBase64Upload.isError,
+      undefined,
+      largeBase64Upload.content[0].text,
+    );
+    assert.deepEqual(
+      Buffer.from(await requests.at(-1).data.get("file").arrayBuffer()),
+      largeFileBytes,
+    );
+
+    const symlinkPath = join(uploadDirectory, "link.pdf");
+    try {
+      await symlink(outsidePath, symlinkPath);
+      assert.equal((await call({ file_path: symlinkPath })).isError, undefined);
+      assert.deepEqual(
+        Buffer.from(await requests.at(-1).data.get("file").arrayBuffer()),
+        fileBytes,
+      );
+    } catch (error) {
+      if (error.code !== "EPERM" && error.code !== "EACCES") throw error;
+      context.diagnostic("Symlink test unavailable due to OS permissions");
+    }
+    axios.defaults.adapter = async (config) => {
+      throw new axios.AxiosError(
+        "Request failed",
+        "ERR_BAD_REQUEST",
+        config,
+        {},
+        {
+          status: 413,
+          data: { message: "Fortnox rejected file" },
+        },
+      );
+    };
+    const rejectedUpload = await call({ file_path: largeFile });
+    assert.equal(rejectedUpload.isError, true);
+    assert.match(rejectedUpload.content[0].text, /Fortnox rejected file/);
+  } finally {
+    axios.defaults.adapter = originalAdapter;
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
 });
 
 test("generic archive download preserves binary PDF bytes", async () => {

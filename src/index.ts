@@ -54,7 +54,7 @@ import { registerCurrencyTools } from "./tools/currencies.js";
 import { registerTermsOfPaymentTools } from "./tools/termsOfPayment.js";
 import { registerFortnoxApiTools } from "./tools/api.js";
 
-function createMcpServer(): McpServer {
+function createMcpServer(allowLocalFileUploads = false): McpServer {
   const server = new McpServer({
     name: "fortnox-mcp-server",
     version: "1.0.0",
@@ -78,13 +78,13 @@ function createMcpServer(): McpServer {
   registerContractTools(server);
   registerCurrencyTools(server);
   registerTermsOfPaymentTools(server);
-  registerFortnoxApiTools(server);
+  registerFortnoxApiTools(server, { allowLocalFileUploads });
 
   return server;
 }
 
 async function runStdio(): Promise<void> {
-  const server = createMcpServer();
+  const server = createMcpServer(true);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
@@ -92,7 +92,7 @@ async function runStdio(): Promise<void> {
 async function runLocalHTTP(): Promise<void> {
   const server = createMcpServer();
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: Number.MAX_SAFE_INTEGER }));
 
   // Health check endpoint
   app.get("/health", (_req, res) => {

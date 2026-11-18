@@ -50,6 +50,14 @@ export function createRemoteServer(options: RemoteServerOptions): Express {
   initializeTokenProvider(oauthProvider.getTokenProvider());
 
   const app = express();
+  app.use(
+    "/mcp",
+    requireBearerAuth({
+      verifier: oauthProvider,
+      resourceMetadataUrl: `${serverUrl}/.well-known/oauth-protected-resource`,
+    }),
+    express.json({ limit: Number.MAX_SAFE_INTEGER }),
+  );
   app.use(express.json());
 
   // Trust proxy headers (for Vercel, etc.)
@@ -137,38 +145,31 @@ export function createRemoteServer(options: RemoteServerOptions): Express {
   registerFortnoxApiTools(mcpServer);
 
   // Protected MCP endpoint
-  app.post(
-    "/mcp",
-    requireBearerAuth({
-      verifier: oauthProvider,
-      resourceMetadataUrl: `${serverUrl}/.well-known/oauth-protected-resource`,
-    }),
-    async (req: Request, res: Response) => {
-      try {
-        const userId = req.auth ? getUserIdFromAuth(req.auth) : undefined;
+  app.post("/mcp", async (req: Request, res: Response) => {
+    try {
+      const userId = req.auth ? getUserIdFromAuth(req.auth) : undefined;
 
-        if (!userId) {
-          res.status(401).json({ error: "No user context" });
-          return;
-        }
-
-        const transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: undefined,
-          enableJsonResponse: true,
-        });
-
-        res.on("close", () => transport.close());
-
-        await runWithContext({ userId }, async () => {
-          await mcpServer.connect(transport);
-          await transport.handleRequest(req, res, req.body);
-        });
-      } catch (error) {
-        console.error("[MCP] Request error:", error);
-        res.status(500).json({ error: "Internal server error" });
+      if (!userId) {
+        res.status(401).json({ error: "No user context" });
+        return;
       }
-    },
-  );
+
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+      });
+
+      res.on("close", () => transport.close());
+
+      await runWithContext({ userId }, async () => {
+        await mcpServer.connect(transport);
+        await transport.handleRequest(req, res, req.body);
+      });
+    } catch (error) {
+      console.error("[MCP] Request error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
 
   // Error handler
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {

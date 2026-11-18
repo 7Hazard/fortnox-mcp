@@ -13,6 +13,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import test from "node:test";
+import axios from "axios";
 import * as jose from "jose";
 
 const originalEnvironment = { ...process.env };
@@ -31,6 +32,7 @@ const { EnvVarTokenProvider } = await import("../dist/auth/envVarProvider.js");
 const { FortnoxProxyOAuthProvider } =
   await import("../dist/auth/oauthProvider.js");
 const { MemoryTokenStorage } = await import("../dist/auth/storage/memory.js");
+const { createRemoteServer } = await import("../dist/server/remote.js");
 
 test.after(() => {
   for (const name of [
@@ -149,6 +151,96 @@ test("remote authorization rejects stale access and refresh tokens", async () =>
     { errorCode: "invalid_grant" },
   );
   assert.equal(await storage.get(userId), null);
+});
+
+test("remote MCP accepts large authenticated uploads after authorization", async () => {
+  const storage = new MemoryTokenStorage();
+  const secret = "test-jwt-secret";
+  const issuer = "https://example.test";
+  const userId = "test-user";
+  await storage.set(userId, {
+    accessToken: "access",
+    refreshToken: "refresh",
+    expiresAt: Date.now() + 3600000,
+    scope: FORTNOX_SCOPES.join(" "),
+  });
+  const token = await new jose.SignJWT({
+    userId,
+    clientId: "test-client",
+    scopes: [],
+    type: "access",
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuer(issuer)
+    .setExpirationTime("1h")
+    .sign(new TextEncoder().encode(secret));
+  const app = createRemoteServer({
+    serverUrl: issuer,
+    jwtSecret: secret,
+    tokenStorage: storage,
+  });
+  const server = app.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const url = `http://127.0.0.1:${server.address().port}/mcp/`;
+  const originalAdapter = axios.defaults.adapter;
+  let uploadedFile;
+  axios.defaults.adapter = async (config) => {
+    uploadedFile = config.data.get("file");
+    return {
+      data: { ok: true },
+      status: 200,
+      statusText: "OK",
+      headers: {},
+      config,
+    };
+  };
+  try {
+    const unauthorized = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "x".repeat(200000),
+    });
+    assert.equal(unauthorized.status, 401);
+    await unauthorized.arrayBuffer();
+
+    const fileBytes = Buffer.alloc(5 * 1024 * 1024 + 1, 0xab);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "fortnox_call_api_operation",
+          arguments: {
+            operation_id: "ArchiveController_doCreate",
+            body: {
+              file: {
+                filename: "large.pdf",
+                content_base64: fileBytes.toString("base64"),
+              },
+            },
+          },
+        },
+      }),
+    });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.id, 1);
+    assert.equal(result.result.isError, undefined);
+    assert.deepEqual(Buffer.from(await uploadedFile.arrayBuffer()), fileBytes);
+  } finally {
+    axios.defaults.adapter = originalAdapter;
+    server.closeAllConnections();
+    await new Promise((resolve, reject) =>
+      server.close((error) => (error ? reject(error) : resolve())),
+    );
+  }
 });
 
 test(
