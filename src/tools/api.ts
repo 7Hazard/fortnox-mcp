@@ -1,11 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { CHARACTER_LIMIT } from "../constants.js";
-import {
-  buildErrorResponse,
-  buildToolResponse,
-  truncateText,
-} from "../services/formatters.js";
+import { buildErrorResponse } from "../services/formatters.js";
 import { fortnoxRequest } from "../services/api.js";
 import { FORTNOX_API_OPERATIONS } from "../generated/fortnoxApiOperations.js";
 
@@ -42,6 +37,13 @@ const OPERATIONS_BY_ID = new Map<string, ApiOperation>(
 const OPERATION_IDS = API_OPERATIONS.map(
   (operation) => operation.operationId,
 ) as [string, ...string[]];
+
+function buildApiResponse<T>(output: T) {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(output, null, 2) }],
+    structuredContent: output,
+  };
+}
 
 const ListOperationsSchema = z.object({
   search: z
@@ -320,6 +322,9 @@ function createMultipartBody(
 function getResponseType(
   operation: ApiOperation,
 ): "json" | "text" | "arraybuffer" {
+  if (operation.operationId === "ArchiveController_doShow") {
+    return "arraybuffer";
+  }
   if (
     (operation.responseContentTypes as readonly string[]).includes(
       "application/pdf",
@@ -344,6 +349,9 @@ function getResponseType(
 
 function getAcceptHeader(operation: ApiOperation): string {
   const contentTypes = operation.responseContentTypes as readonly string[];
+  if (operation.operationId === "ArchiveController_doShow") {
+    return "*/*";
+  }
   if (contentTypes.includes("application/pdf")) {
     return "application/pdf";
   }
@@ -412,7 +420,7 @@ export function registerFortnoxApiTools(server: McpServer): void {
     {
       title: "List Fortnox API Operations",
       description:
-        "Search the documented Fortnox API operations available through fortnox_call_api_operation. Search by resource, action, path, or business term; use the returned operation_id to call one.",
+        "Search documented Fortnox API operations by resource, action, path, or business term.",
       inputSchema: ListOperationsSchema,
       annotations: {
         readOnlyHint: true,
@@ -451,7 +459,7 @@ export function registerFortnoxApiTools(server: McpServer): void {
           has_more: offset + operations.length < matches.length,
           operations,
         };
-        return buildToolResponse(JSON.stringify(output, null, 2), output);
+        return buildApiResponse(output);
       } catch (error) {
         return buildErrorResponse(error);
       }
@@ -496,10 +504,162 @@ export function registerFortnoxApiTools(server: McpServer): void {
           request_body_schema: operation.requestBodySchema,
           response_content_types: operation.responseContentTypes,
         };
-        return buildToolResponse(JSON.stringify(output, null, 2), output);
+        return buildApiResponse(output);
       } catch (error) {
         return buildErrorResponse(error);
       }
+    },
+  );
+
+  const callOperation = async ({
+    operation_id,
+    path_parameters = {},
+    query_parameters = {},
+    header_parameters = {},
+    body,
+  }: z.infer<typeof CallOperationSchema>) => {
+    try {
+      const operation = OPERATIONS_BY_ID.get(operation_id);
+      if (!operation) {
+        throw new Error(`Unknown Fortnox API operation '${operation_id}'.`);
+      }
+
+      const endpoint = validateParameters(
+        operation,
+        path_parameters,
+        header_parameters,
+        query_parameters,
+      );
+      const requestBody = buildRequestBody(operation, body);
+      const responseType = getResponseType(operation);
+      let responseContentType: string | undefined;
+      const response = await fortnoxRequest<unknown>(
+        endpoint,
+        operation.method,
+        requestBody.data,
+        serializeQueryParameters(operation, query_parameters),
+        {
+          contentType: requestBody.contentType,
+          accept: getAcceptHeader(operation),
+          responseType,
+          headers: header_parameters,
+          onResponseContentType: (contentType) => {
+            responseContentType = contentType;
+          },
+        },
+      );
+      let data = response;
+      if (responseType === "arraybuffer") {
+        const file = toBuffer(response);
+        const contentType = responseContentType
+          ?.split(";")[0]
+          .trim()
+          .toLowerCase();
+        if (
+          contentType === "application/json" ||
+          contentType?.endsWith("+json")
+        ) {
+          data = JSON.parse(file.toString("utf8"));
+        } else {
+          data = {
+            encoding: "base64",
+            content_type: contentType || "application/octet-stream",
+            data: file.toString("base64"),
+          };
+        }
+      }
+      const output = {
+        operation_id,
+        method: operation.method,
+        path: endpoint,
+        data,
+      };
+      return buildApiResponse(output);
+    } catch (error) {
+      return buildErrorResponse(error);
+    }
+  };
+
+  const readOnlyAnnotations = {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: true,
+  };
+
+  server.registerTool(
+    "fortnox_list_voucher_file_connections",
+    {
+      title: "List Fortnox Voucher File Connections",
+      description:
+        "List file connections for vouchers, optionally filtered by voucher year, description, number, or series.",
+      inputSchema: z.object({
+        voucher_year: z.union([z.string(), z.number()]).optional(),
+        voucher_description: z.string().optional(),
+        voucher_number: z.union([z.string(), z.number()]).optional(),
+        voucher_series: z.string().optional(),
+      }),
+      annotations: readOnlyAnnotations,
+    },
+    async ({
+      voucher_year,
+      voucher_description,
+      voucher_number,
+      voucher_series,
+    }) => {
+      const query_parameters: Record<string, string | number> = {};
+      if (voucher_year !== undefined)
+        query_parameters.voucheryear = voucher_year;
+      if (voucher_description !== undefined)
+        query_parameters.voucherdescription = voucher_description;
+      if (voucher_number !== undefined)
+        query_parameters.vouchernumber = voucher_number;
+      if (voucher_series !== undefined)
+        query_parameters.voucherseries = voucher_series;
+      return callOperation({
+        operation_id: "VoucherFileConnectionController_doIndex",
+        query_parameters,
+      });
+    },
+  );
+
+  server.registerTool(
+    "fortnox_list_archive",
+    {
+      title: "List Fortnox Archive",
+      description: "List the root archive or an archive folder by path.",
+      inputSchema: z.object({ path: z.string().optional() }),
+      annotations: readOnlyAnnotations,
+    },
+    async ({ path }) =>
+      callOperation({
+        operation_id: "ArchiveController_doIndex",
+        query_parameters: path === undefined ? {} : { path },
+      }),
+  );
+
+  server.registerTool(
+    "fortnox_get_archive_file",
+    {
+      title: "Get Fortnox Archive File",
+      description:
+        "Retrieve an archive file by ID. Binary files are returned as base64 in data.data.",
+      inputSchema: z.object({
+        id: z.string().min(1),
+        path: z.string().optional(),
+        file_id: z.string().optional(),
+      }),
+      annotations: readOnlyAnnotations,
+    },
+    async ({ id, path, file_id }) => {
+      const query_parameters: Record<string, string> = {};
+      if (path !== undefined) query_parameters.path = path;
+      if (file_id !== undefined) query_parameters.fileid = file_id;
+      return callOperation({
+        operation_id: "ArchiveController_doShow",
+        path_parameters: { id },
+        query_parameters,
+      });
     },
   );
 
@@ -520,66 +680,6 @@ Supply path_parameters and query_parameters using the exact names shown in the c
         openWorldHint: true,
       },
     },
-    async ({
-      operation_id,
-      path_parameters = {},
-      query_parameters = {},
-      header_parameters = {},
-      body,
-    }) => {
-      try {
-        const operation = OPERATIONS_BY_ID.get(operation_id);
-        if (!operation) {
-          throw new Error(`Unknown Fortnox API operation '${operation_id}'.`);
-        }
-
-        const endpoint = validateParameters(
-          operation,
-          path_parameters,
-          header_parameters,
-          query_parameters,
-        );
-        const requestBody = buildRequestBody(operation, body);
-        const responseType = getResponseType(operation);
-        const response = await fortnoxRequest<unknown>(
-          endpoint,
-          operation.method,
-          requestBody.data,
-          serializeQueryParameters(operation, query_parameters),
-          {
-            contentType: requestBody.contentType,
-            accept: getAcceptHeader(operation),
-            responseType,
-            headers: header_parameters,
-          },
-        );
-        let data = response;
-        if (responseType === "arraybuffer") {
-          const file = toBuffer(response);
-          if (file.length > 10 * 1024 * 1024) {
-            throw new Error(
-              "Binary responses larger than 10 MB cannot be returned by this MCP tool.",
-            );
-          }
-          data = {
-            encoding: "base64",
-            content_type: getAcceptHeader(operation),
-            data: file.toString("base64"),
-          };
-        }
-        const output = {
-          operation_id,
-          method: operation.method,
-          path: endpoint,
-          data,
-        };
-        return buildToolResponse(
-          truncateText(JSON.stringify(output, null, 2), CHARACTER_LIMIT),
-          output,
-        );
-      } catch (error) {
-        return buildErrorResponse(error);
-      }
-    },
+    callOperation,
   );
 }

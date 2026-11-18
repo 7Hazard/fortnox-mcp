@@ -28,6 +28,7 @@ export interface FortnoxRequestOptions {
   accept?: string;
   responseType?: "json" | "text" | "arraybuffer";
   headers?: Record<string, string>;
+  onResponseContentType?: (contentType: string | undefined) => void;
 }
 
 // Rate limiting state
@@ -146,6 +147,10 @@ export async function fortnoxRequest<T>(
 
   try {
     const response = await axios(config);
+    const contentType = response.headers["content-type"];
+    options.onResponseContentType?.(
+      typeof contentType === "string" ? contentType : undefined,
+    );
     return response.data;
   } catch (error) {
     throw handleApiError(error, endpoint);

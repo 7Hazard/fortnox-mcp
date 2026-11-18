@@ -214,6 +214,12 @@ If a token is configured, it is used without opening a browser.
 - `fortnox_list_voucher_series` - List available voucher series
 - `fortnox_account_activity` - Get activity for a specific account
 - `fortnox_search_vouchers` - Search vouchers by description, account, or amount
+- `fortnox_list_voucher_file_connections` - List linked voucher files
+
+### Archive
+
+- `fortnox_list_archive` - List archive folders and files
+- `fortnox_get_archive_file` - Retrieve an archive file by ID
 
 ### Company Information
 
@@ -250,8 +256,10 @@ These tools expose the operations in `fortnox_docs/fortnox_api.json`, including
 resources that do not have dedicated MCP tools yet. Access remains subject to
 the connected Fortnox account's permissions and enabled modules. File uploads
 use a `file` object with `filename`, `content_base64`, and optional
-`content_type` (5 MB maximum). PDF and binary responses are returned as base64
-(10 MB maximum).
+`content_type` (5 MB maximum). API responses are returned in full in both text
+and structured content; binary responses use base64 in `data.data`. Clients
+and hosting platforms may impose their own response limits. These tools do not
+extract PDF text.
 
 Refresh the bundled official API reference and generated operation catalog with:
 
