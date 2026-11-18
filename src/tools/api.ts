@@ -66,6 +66,41 @@ const QueryValueSchema = z.union([
   z.array(z.union([z.string(), z.number(), z.boolean()])),
 ]);
 
+const UploadFileSchema = z.union([
+  z
+    .object({
+      filename: z.string().min(1),
+      content_base64: z.string(),
+      content_type: z.string().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      file_path: z.string().min(1),
+      filename: z.string().min(1).optional(),
+      content_type: z.string().optional(),
+    })
+    .strict(),
+]);
+
+const AttachmentEntityTypeSchema = z.enum([
+  "OF",
+  "O",
+  "F",
+  "C",
+  "LGR_IO",
+  "LGR_IG",
+]);
+const AttachmentSchema = z
+  .object({
+    entityId: z.number().int().safe().optional(),
+    entityType: AttachmentEntityTypeSchema.optional(),
+    fileId: z.string().optional(),
+    id: z.string().uuid().optional(),
+    includeOnSend: z.boolean().optional(),
+  })
+  .strict();
+
 const CallOperationSchema = z.object({
   operation_id: z
     .enum(OPERATION_IDS)
@@ -374,7 +409,11 @@ async function createMultipartBody(
 function getResponseType(
   operation: ApiOperation,
 ): "json" | "text" | "arraybuffer" {
-  if (operation.operationId === "ArchiveController_doShow") {
+  if (
+    ["ArchiveController_doShow", "InboxController_doShow"].includes(
+      operation.operationId,
+    )
+  ) {
     return "arraybuffer";
   }
   if (
@@ -401,7 +440,11 @@ function getResponseType(
 
 function getAcceptHeader(operation: ApiOperation): string {
   const contentTypes = operation.responseContentTypes as readonly string[];
-  if (operation.operationId === "ArchiveController_doShow") {
+  if (
+    ["ArchiveController_doShow", "InboxController_doShow"].includes(
+      operation.operationId,
+    )
+  ) {
     return "*/*";
   }
   if (contentTypes.includes("application/pdf")) {
@@ -663,6 +706,315 @@ export function registerFortnoxApiTools(
     openWorldHint: true,
   };
 
+  for (const connection of [
+    {
+      name: "supplier_invoice",
+      label: "Supplier Invoice",
+      controller: "SupplierInvoiceFileConnectionController",
+      filter: "supplier_invoice_number",
+      query: "supplierinvoicenumber",
+      hasGet: true,
+    },
+    {
+      name: "article",
+      label: "Article",
+      controller: "ArticleFileConnectionController",
+      filter: "article_number",
+      query: "articlenumber",
+      hasGet: true,
+    },
+    {
+      name: "asset",
+      label: "Asset",
+      controller: "AssetFileConnectionController",
+      filter: "asset_id",
+      query: "assetid",
+      hasGet: false,
+    },
+  ]) {
+    server.registerTool(
+      `fortnox_list_${connection.name}_file_connections`,
+      {
+        title: `List Fortnox ${connection.label} File Connections`,
+        description: `List ${connection.label.toLowerCase()} file connections with an optional filter.`,
+        inputSchema: z.object({ [connection.filter]: z.string().optional() }),
+        annotations: readOnlyAnnotations,
+      },
+      async (args) => {
+        const filter = args[connection.filter];
+        return callOperation({
+          operation_id: `${connection.controller}_doIndex`,
+          query_parameters:
+            filter === undefined ? {} : { [connection.query]: filter },
+        });
+      },
+    );
+    if (connection.hasGet) {
+      server.registerTool(
+        `fortnox_get_${connection.name}_file_connection`,
+        {
+          title: `Get Fortnox ${connection.label} File Connection`,
+          description: `Retrieve a ${connection.label.toLowerCase()} file connection by file ID.`,
+          inputSchema: z.object({ file_id: z.string().min(1) }),
+          annotations: readOnlyAnnotations,
+        },
+        async ({ file_id }) =>
+          callOperation({
+            operation_id: `${connection.controller}_doShow`,
+            path_parameters: { FileId: file_id },
+          }),
+      );
+    }
+    server.registerTool(
+      `fortnox_delete_${connection.name}_file_connection`,
+      {
+        title: `Delete Fortnox ${connection.label} File Connection`,
+        description: `Remove a ${connection.label.toLowerCase()} file connection by file ID.`,
+        inputSchema: z.object({ file_id: z.string().min(1) }),
+        annotations: deleteAnnotations,
+      },
+      async ({ file_id }) =>
+        callOperation({
+          operation_id: `${connection.controller}_doDelete`,
+          path_parameters: { FileId: file_id },
+        }),
+    );
+  }
+
+  server.registerTool(
+    "fortnox_create_supplier_invoice_file_connection",
+    {
+      title: "Create Fortnox Supplier Invoice File Connection",
+      description: "Connect a file to a supplier invoice.",
+      inputSchema: z.object({
+        file_id: z.string().min(1),
+        supplier_invoice_number: z.string().min(1),
+        name: z.string().optional(),
+        supplier_name: z.string().optional(),
+      }),
+      annotations: createAnnotations,
+    },
+    async ({ file_id, supplier_invoice_number, name, supplier_name }) =>
+      callOperation({
+        operation_id: "SupplierInvoiceFileConnectionController_doCreate",
+        body: {
+          SupplierInvoiceFileConnection: {
+            FileId: file_id,
+            SupplierInvoiceNumber: supplier_invoice_number,
+            Name: name,
+            SupplierName: supplier_name,
+          },
+        },
+      }),
+  );
+
+  server.registerTool(
+    "fortnox_create_article_file_connection",
+    {
+      title: "Create Fortnox Article File Connection",
+      description: "Connect a file to an article.",
+      inputSchema: z.object({
+        file_id: z.string().min(1),
+        article_number: z.string().min(1),
+      }),
+      annotations: createAnnotations,
+    },
+    async ({ file_id, article_number }) =>
+      callOperation({
+        operation_id: "ArticleFileConnectionController_doCreate",
+        body: {
+          ArticleFileConnection: {
+            FileId: file_id,
+            ArticleNumber: article_number,
+          },
+        },
+      }),
+  );
+
+  server.registerTool(
+    "fortnox_create_asset_file_connection",
+    {
+      title: "Create Fortnox Asset File Connection",
+      description:
+        "Connect a file to an asset. Requires access to Fortnox Assets.",
+      inputSchema: z.object({
+        file_id: z.string().min(1),
+        asset_id: z.string().min(1),
+        name: z.string().optional(),
+      }),
+      annotations: createAnnotations,
+    },
+    async ({ file_id, asset_id, name }) =>
+      callOperation({
+        operation_id: "AssetFileConnectionController_doCreate",
+        body: { FileId: file_id, AssetId: asset_id, Name: name },
+      }),
+  );
+
+  server.registerTool(
+    "fortnox_list_inbox",
+    {
+      title: "List Fortnox Inbox",
+      description: "List the inbox root folder.",
+      inputSchema: z.object({}),
+      annotations: readOnlyAnnotations,
+    },
+    async () => callOperation({ operation_id: "InboxController_doIndex" }),
+  );
+
+  server.registerTool(
+    "fortnox_get_inbox_item",
+    {
+      title: "Get Fortnox Inbox Item",
+      description:
+        "Retrieve an inbox file or folder by ID. Binary files are returned as base64.",
+      inputSchema: z.object({ id: z.string().min(1) }),
+      annotations: readOnlyAnnotations,
+    },
+    async ({ id }) =>
+      callOperation({
+        operation_id: "InboxController_doShow",
+        path_parameters: { Id: id },
+      }),
+  );
+
+  server.registerTool(
+    "fortnox_upload_inbox_file",
+    {
+      title: "Upload Fortnox Inbox File",
+      description:
+        "Upload a file to the inbox. Local file paths are available only over stdio.",
+      inputSchema: z.object({
+        file: UploadFileSchema,
+        folder_id: z.string().optional(),
+        path: z.string().optional(),
+      }),
+      annotations: createAnnotations,
+    },
+    async ({ file, folder_id, path }) => {
+      const query_parameters: Record<string, string> = {};
+      if (folder_id !== undefined) query_parameters.folderId = folder_id;
+      if (path !== undefined) query_parameters.path = path;
+      return callOperation({
+        operation_id: "InboxController_doCreate",
+        query_parameters,
+        body: { file },
+      });
+    },
+  );
+
+  server.registerTool(
+    "fortnox_delete_inbox_item",
+    {
+      title: "Delete Fortnox Inbox Item",
+      description:
+        "Delete an inbox file or folder by ID. Deleting a folder can remove its contents.",
+      inputSchema: z.object({ id: z.string().min(1) }),
+      annotations: deleteAnnotations,
+    },
+    async ({ id }) =>
+      callOperation({
+        operation_id: "InboxController_doDelete",
+        path_parameters: { Id: id },
+      }),
+  );
+
+  for (const attachmentQuery of [
+    { name: "list", operation: "getAttachments", query: "entityid" },
+    {
+      name: "count",
+      operation: "getNumberOfAttachmentsForEntity",
+      query: "entityids",
+    },
+  ]) {
+    server.registerTool(
+      `fortnox_${attachmentQuery.name}_attachments`,
+      {
+        title: `${attachmentQuery.name === "list" ? "List" : "Count"} Fortnox Attachments`,
+        description:
+          "Query attachments by entity IDs and Fortnox entity type. Entity mappings and required scope are not confirmed.",
+        inputSchema: z.object({
+          entity_ids: z.array(z.number().int().safe()).min(1),
+          entity_type: AttachmentEntityTypeSchema,
+        }),
+        annotations: readOnlyAnnotations,
+      },
+      async ({ entity_ids, entity_type }) =>
+        callOperation({
+          operation_id: attachmentQuery.operation,
+          query_parameters: {
+            [attachmentQuery.query]: entity_ids,
+            entitytype: entity_type,
+          },
+        }),
+    );
+  }
+
+  for (const attachmentAction of [
+    {
+      name: "attach_files",
+      title: "Attach Fortnox Files",
+      operation: "attach",
+      description: "Attach files to one or more entities.",
+    },
+    {
+      name: "validate_attachments_on_send",
+      title: "Validate Fortnox Attachments on Send",
+      operation: "validateIncludedOnSend",
+      description: "Validate attachments for inclusion on send.",
+    },
+  ]) {
+    server.registerTool(
+      `fortnox_${attachmentAction.name}`,
+      {
+        title: attachmentAction.title,
+        description: `${attachmentAction.description} Entity mappings and required scope are not confirmed.`,
+        inputSchema: z.object({ attachments: z.array(AttachmentSchema) }),
+        annotations: createAnnotations,
+      },
+      async ({ attachments }) =>
+        callOperation({
+          operation_id: attachmentAction.operation,
+          body: attachments,
+        }),
+    );
+  }
+
+  server.registerTool(
+    "fortnox_update_attachment",
+    {
+      title: "Update Fortnox Attachment",
+      description:
+        "Update an attachment by ID. Entity mappings and required scope are not confirmed.",
+      inputSchema: z.object({
+        attachment_id: z.string().uuid(),
+        attachment: AttachmentSchema,
+      }),
+      annotations: createAnnotations,
+    },
+    async ({ attachment_id, attachment }) =>
+      callOperation({
+        operation_id: "updateAttachment",
+        path_parameters: { attachmentId: attachment_id },
+        body: attachment,
+      }),
+  );
+
+  server.registerTool(
+    "fortnox_detach_file",
+    {
+      title: "Detach Fortnox File",
+      description: "Detach a file from an entity by attachment ID.",
+      inputSchema: z.object({ attachment_id: z.string().uuid() }),
+      annotations: deleteAnnotations,
+    },
+    async ({ attachment_id }) =>
+      callOperation({
+        operation_id: "detach",
+        path_parameters: { attachmentId: attachment_id },
+      }),
+  );
+
   server.registerTool(
     "fortnox_list_voucher_file_connections",
     {
@@ -790,22 +1142,7 @@ export function registerFortnoxApiTools(
       description:
         "Upload a file to the archive root or a folder. Local file paths are available only over stdio.",
       inputSchema: z.object({
-        file: z.union([
-          z
-            .object({
-              filename: z.string().min(1),
-              content_base64: z.string(),
-              content_type: z.string().optional(),
-            })
-            .strict(),
-          z
-            .object({
-              file_path: z.string().min(1),
-              filename: z.string().min(1).optional(),
-              content_type: z.string().optional(),
-            })
-            .strict(),
-        ]),
+        file: UploadFileSchema,
         folder_id: z.string().optional(),
         path: z.string().optional(),
       }),

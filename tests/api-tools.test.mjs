@@ -196,7 +196,7 @@ test("multipart file paths work locally without directory configuration", async 
   }
 });
 
-test("generic archive download preserves binary PDF bytes", async () => {
+test("generic archive and inbox downloads preserve binary PDF bytes", async () => {
   const originalAdapter = axios.defaults.adapter;
   const pdf = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0xff, 0x80]);
   let responseType;
@@ -211,16 +211,24 @@ test("generic archive download preserves binary PDF bytes", async () => {
     };
   };
   try {
-    const result = await tools.get("fortnox_call_api_operation").handler({
-      operation_id: "ArchiveController_doShow",
-      path_parameters: { id: "file-id" },
-    });
-    assert.equal(responseType, "arraybuffer");
-    assert.equal(result.structuredContent.data.content_type, "application/pdf");
-    assert.deepEqual(
-      Buffer.from(result.structuredContent.data.data, "base64"),
-      pdf,
-    );
+    for (const [operation_id, path_parameters] of [
+      ["ArchiveController_doShow", { id: "file-id" }],
+      ["InboxController_doShow", { Id: "file-id" }],
+    ]) {
+      const result = await tools.get("fortnox_call_api_operation").handler({
+        operation_id,
+        path_parameters,
+      });
+      assert.equal(responseType, "arraybuffer", operation_id);
+      assert.equal(
+        result.structuredContent.data.content_type,
+        "application/pdf",
+      );
+      assert.deepEqual(
+        Buffer.from(result.structuredContent.data.data, "base64"),
+        pdf,
+      );
+    }
   } finally {
     axios.defaults.adapter = originalAdapter;
   }
@@ -481,6 +489,284 @@ test("dedicated archive and voucher connection actions use documented requests",
   }
 });
 
+test("dedicated connection, inbox, and attachment actions forward documented requests", async () => {
+  const temporaryDirectory = await mkdtemp(join(tmpdir(), "fortnox-files-"));
+  const filePath = join(temporaryDirectory, "inbox.pdf");
+  const fileBytes = Buffer.from([0x25, 0x50, 0x44, 0x46, 0xff, 0x80]);
+  const originalAdapter = axios.defaults.adapter;
+  const server = new McpServer({ name: "test", version: "1.0.0" });
+  const client = new Client({ name: "test-client", version: "1.0.0" });
+  registerFortnoxApiTools(server, { allowLocalFileUploads: true });
+  const [clientTransport, serverTransport] =
+    InMemoryTransport.createLinkedPair();
+  const requests = [];
+  axios.defaults.adapter = async (config) => {
+    requests.push(config);
+    const pdf = config.url.endsWith("/3/inbox/file%2Fid");
+    return {
+      data:
+        config.responseType === "arraybuffer"
+          ? pdf
+            ? fileBytes
+            : Buffer.from('{"folder":true}')
+          : { ok: true },
+      status: 200,
+      statusText: "OK",
+      headers: { "content-type": pdf ? "application/pdf" : "application/json" },
+      config,
+    };
+  };
+  try {
+    await writeFile(filePath, fileBytes);
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+    const listed = await client.listTools();
+    const call = (name, args) => client.callTool({ name, arguments: args });
+    const check = (method, path) => {
+      assert.equal(requests.at(-1).method, method);
+      assert.ok(requests.at(-1).url.endsWith(path), requests.at(-1).url);
+    };
+    for (const [name, resource, filter, query, hasGet] of [
+      [
+        "supplier_invoice",
+        "supplierinvoice",
+        "supplier_invoice_number",
+        "supplierinvoicenumber",
+        true,
+      ],
+      ["article", "article", "article_number", "articlenumber", true],
+      ["asset", "asset", "asset_id", "assetid", false],
+    ]) {
+      for (const [action, readOnly, destructive] of [
+        ["list", true, false],
+        ["create", false, false],
+        ["delete", false, true],
+        ...(hasGet ? [["get", true, false]] : []),
+      ]) {
+        const plural = action === "list" ? "s" : "";
+        const tool = listed.tools.find(
+          (item) =>
+            item.name === `fortnox_${action}_${name}_file_connection${plural}`,
+        );
+        assert.ok(tool);
+        assert.equal(tool.annotations.readOnlyHint, readOnly);
+        assert.equal(tool.annotations.destructiveHint, destructive);
+      }
+      let result = await call(`fortnox_list_${name}_file_connections`, {
+        [filter]: "123",
+      });
+      assert.equal(result.isError, undefined);
+      check("get", `/3/${resource}fileconnections`);
+      assert.deepEqual(requests.at(-1).params, { [query]: "123" });
+      for (const [action, method] of [
+        ...(hasGet ? [["get", "get"]] : []),
+        ["delete", "delete"],
+      ]) {
+        result = await call(`fortnox_${action}_${name}_file_connection`, {
+          file_id: "file/id",
+        });
+        assert.equal(result.isError, undefined);
+        check(method, `/3/${resource}fileconnections/file%2Fid`);
+      }
+    }
+    for (const [name, args, expected] of [
+      [
+        "supplier_invoice",
+        {
+          file_id: "f",
+          supplier_invoice_number: "7",
+          name: "Receipt",
+          supplier_name: "Supplier",
+        },
+        {
+          SupplierInvoiceFileConnection: {
+            FileId: "f",
+            SupplierInvoiceNumber: "7",
+            Name: "Receipt",
+            SupplierName: "Supplier",
+          },
+        },
+      ],
+      [
+        "article",
+        { file_id: "f", article_number: "a" },
+        { ArticleFileConnection: { FileId: "f", ArticleNumber: "a" } },
+      ],
+      [
+        "asset",
+        { file_id: "f", asset_id: "a", name: "Receipt" },
+        { FileId: "f", AssetId: "a", Name: "Receipt" },
+      ],
+    ]) {
+      assert.equal(
+        (await call(`fortnox_create_${name}_file_connection`, args)).isError,
+        undefined,
+      );
+      check("post", `/3/${name.replaceAll("_", "")}fileconnections`);
+      assert.deepEqual(JSON.parse(requests.at(-1).data), expected);
+    }
+
+    for (const [name, readOnly, destructive] of [
+      ["fortnox_list_inbox", true, false],
+      ["fortnox_get_inbox_item", true, false],
+      ["fortnox_upload_inbox_file", false, false],
+      ["fortnox_delete_inbox_item", false, true],
+      ["fortnox_list_attachments", true, false],
+      ["fortnox_count_attachments", true, false],
+      ["fortnox_attach_files", false, false],
+      ["fortnox_update_attachment", false, false],
+      ["fortnox_detach_file", false, true],
+      ["fortnox_validate_attachments_on_send", false, false],
+    ]) {
+      const tool = listed.tools.find((item) => item.name === name);
+      assert.ok(tool);
+      assert.equal(tool.annotations.readOnlyHint, readOnly);
+      assert.equal(tool.annotations.destructiveHint, destructive);
+    }
+    assert.equal((await call("fortnox_list_inbox", {})).isError, undefined);
+    check("get", "/3/inbox");
+    const download = await call("fortnox_get_inbox_item", { id: "file/id" });
+    check("get", "/3/inbox/file%2Fid");
+    assert.equal(requests.at(-1).headers.Accept, "*/*");
+    assert.deepEqual(
+      Buffer.from(download.structuredContent.data.data, "base64"),
+      fileBytes,
+    );
+    const folder = await call("fortnox_get_inbox_item", { id: "folder" });
+    assert.deepEqual(folder.structuredContent.data, { folder: true });
+    for (const file of [
+      {
+        filename: "inbox.pdf",
+        content_base64: fileBytes.toString("base64"),
+        content_type: "application/pdf",
+      },
+      { file_path: filePath },
+    ]) {
+      assert.equal(
+        (
+          await call("fortnox_upload_inbox_file", {
+            file,
+            folder_id: "folder",
+            path: "receipts",
+          })
+        ).isError,
+        undefined,
+      );
+      check("post", "/3/inbox");
+      assert.deepEqual(requests.at(-1).params, {
+        folderId: "folder",
+        path: "receipts",
+      });
+      assert.deepEqual(
+        Buffer.from(await requests.at(-1).data.get("file").arrayBuffer()),
+        fileBytes,
+      );
+    }
+    assert.equal(
+      (
+        await tools
+          .get("fortnox_upload_inbox_file")
+          .handler({ file: { file_path: filePath } })
+      ).isError,
+      true,
+    );
+    assert.equal(
+      (await call("fortnox_delete_inbox_item", { id: "file/id" })).isError,
+      undefined,
+    );
+    check("delete", "/3/inbox/file%2Fid");
+
+    for (const [name, query, path] of [
+      ["list", "entityid", ""],
+      ["count", "entityids", "/numberofattachments"],
+    ]) {
+      assert.equal(
+        (
+          await call(`fortnox_${name}_attachments`, {
+            entity_ids: [1, 2],
+            entity_type: "F",
+          })
+        ).isError,
+        undefined,
+      );
+      check("get", `/api/fileattachments/attachments-v1${path}`);
+      assert.equal(
+        requests.at(-1).paramsSerializer.serialize(requests.at(-1).params),
+        `${query}=1&${query}=2&entitytype=F`,
+      );
+    }
+    const attachmentId = "123e4567-e89b-12d3-a456-426614174000";
+    const attachment = {
+      entityId: 7,
+      entityType: "F",
+      fileId: "f",
+      id: attachmentId,
+      includeOnSend: true,
+    };
+    for (const [name, path] of [
+      ["fortnox_attach_files", ""],
+      ["fortnox_validate_attachments_on_send", "/validateincludedonsend"],
+    ]) {
+      assert.equal(
+        (await call(name, { attachments: [attachment] })).isError,
+        undefined,
+      );
+      check("post", `/api/fileattachments/attachments-v1${path}`);
+      assert.deepEqual(JSON.parse(requests.at(-1).data), [attachment]);
+    }
+    assert.equal(
+      (
+        await call("fortnox_update_attachment", {
+          attachment_id: attachmentId,
+          attachment,
+        })
+      ).isError,
+      undefined,
+    );
+    check("put", `/api/fileattachments/attachments-v1/${attachmentId}`);
+    assert.deepEqual(JSON.parse(requests.at(-1).data), attachment);
+    assert.equal(
+      (await call("fortnox_detach_file", { attachment_id: attachmentId }))
+        .isError,
+      undefined,
+    );
+    check("delete", `/api/fileattachments/attachments-v1/${attachmentId}`);
+
+    const count = requests.length;
+    assert.equal(
+      (
+        await call("fortnox_list_attachments", {
+          entity_ids: [],
+          entity_type: "F",
+        })
+      ).isError,
+      true,
+    );
+    assert.equal(
+      (
+        await call("fortnox_attach_files", {
+          attachments: [{ entityType: "invalid" }],
+        })
+      ).isError,
+      true,
+    );
+    assert.equal(
+      (await call("fortnox_detach_file", { attachment_id: "invalid" })).isError,
+      true,
+    );
+    assert.equal(
+      (await call("fortnox_delete_inbox_item", { id: "" })).isError,
+      true,
+    );
+    assert.equal(requests.length, count);
+  } finally {
+    await client.close();
+    await server.close();
+    axios.defaults.adapter = originalAdapter;
+    await rm(temporaryDirectory, { recursive: true, force: true });
+  }
+});
+
 test("dedicated actions support local company routing", async () => {
   const server = new McpServer({ name: "test", version: "1.0.0" });
   const client = new Client({ name: "test-client", version: "1.0.0" });
@@ -498,6 +784,27 @@ test("dedicated actions support local company routing", async () => {
       "fortnox_delete_voucher_file_connection",
       "fortnox_upload_archive_file",
       "fortnox_delete_archive_item",
+      "fortnox_list_supplier_invoice_file_connections",
+      "fortnox_get_supplier_invoice_file_connection",
+      "fortnox_create_supplier_invoice_file_connection",
+      "fortnox_delete_supplier_invoice_file_connection",
+      "fortnox_list_article_file_connections",
+      "fortnox_get_article_file_connection",
+      "fortnox_create_article_file_connection",
+      "fortnox_delete_article_file_connection",
+      "fortnox_list_asset_file_connections",
+      "fortnox_create_asset_file_connection",
+      "fortnox_delete_asset_file_connection",
+      "fortnox_list_inbox",
+      "fortnox_get_inbox_item",
+      "fortnox_upload_inbox_file",
+      "fortnox_delete_inbox_item",
+      "fortnox_list_attachments",
+      "fortnox_count_attachments",
+      "fortnox_attach_files",
+      "fortnox_update_attachment",
+      "fortnox_detach_file",
+      "fortnox_validate_attachments_on_send",
     ]) {
       const tool = listed.tools.find((item) => item.name === name);
       assert.equal(tool.inputSchema.properties.account.type, "string");

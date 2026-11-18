@@ -247,6 +247,37 @@ files: Fortnox refresh tokens are single-use.
 - `fortnox_upload_archive_file` - Upload a file to the archive
 - `fortnox_delete_archive_item` - Delete an archive file or folder
 
+### Inbox and File Connections
+
+- `fortnox_list_inbox` - List inbox root items
+- `fortnox_get_inbox_item` - Retrieve an inbox file or folder
+- `fortnox_upload_inbox_file` - Upload a file to the inbox
+- `fortnox_delete_inbox_item` - Delete an inbox file or folder
+- `fortnox_list_supplier_invoice_file_connections` - List supplier invoice file connections
+- `fortnox_get_supplier_invoice_file_connection` - Get a supplier invoice file connection
+- `fortnox_create_supplier_invoice_file_connection` - Connect a file to a supplier invoice
+- `fortnox_delete_supplier_invoice_file_connection` - Remove a supplier invoice file connection
+- `fortnox_list_article_file_connections` - List article file connections
+- `fortnox_get_article_file_connection` - Get an article file connection
+- `fortnox_create_article_file_connection` - Connect a file to an article
+- `fortnox_delete_article_file_connection` - Remove an article file connection
+- `fortnox_list_asset_file_connections` - List asset file connections
+- `fortnox_create_asset_file_connection` - Connect a file to an asset
+- `fortnox_delete_asset_file_connection` - Remove an asset file connection
+
+Asset connections require access to Fortnox Assets. File connections use the `connectfile` scope; archive and inbox use their respective scopes. Uploads accept base64, or a local file path over stdio only.
+
+### Attachments
+
+- `fortnox_list_attachments` - List attachments for entities
+- `fortnox_count_attachments` - Count attachments for entities
+- `fortnox_attach_files` - Attach files to entities
+- `fortnox_update_attachment` - Update an attachment
+- `fortnox_detach_file` - Detach a file from an entity
+- `fortnox_validate_attachments_on_send` - Validate attachments for inclusion on send
+
+The attachment API's scope, customer-invoice entity mapping, upload ID mapping, and delivery behavior are not confirmed. See [customer invoice attachment research](docs/fortnox-customer-invoice-attachments.md).
+
 ### Company Information
 
 - `fortnox_get_company_info` - Get company details

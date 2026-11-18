@@ -28,6 +28,6 @@ The live API reference was reachable and contained the attachment path; the chec
 ## This MCP server
 
 - The server requests `invoice`, `archive`, `inbox`, and `connectfile` in its [Fortnox OAuth scope list](../src/auth/credentials.ts#L83). Existing tokens need fresh authorization to gain the added scopes; enabled integration permissions do not themselves add scopes to a token. The attachment API's required scope remains unconfirmed.
-- The current source registers generic tools for discovering and calling catalog operations, including `ArchiveController_doCreate`, `InboxController_doCreate`, and `attach`; it has no dedicated customer-invoice attachment tool. [Registration](../src/index.ts#L81), [generic tools](../src/tools/api.ts#L409), [catalog](../src/generated/fortnoxApiOperations.ts#L2014).
+- The server provides dedicated inbox, file connection, and entity attachment tools as well as generic catalog operations. The attachment tools do not establish a customer-invoice workflow; the mappings and delivery behavior above remain unconfirmed. [Tools](../src/tools/api.ts), [catalog](../src/generated/fortnoxApiOperations.ts#L2014).
 - The generic multipart uploader accepts base64 or local stdio file paths without an MCP file-size limit. Fortnox and the deployment may impose limits. [Uploader](../src/tools/api.ts#L243).
 - A connected MCP instance may be running a different version of the server; verify that its tool list includes the generic API tools before relying on them.
